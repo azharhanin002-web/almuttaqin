@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { Send, Volume2, RefreshCcw, Radio, Zap, Users, CheckCheck, Play, Square } from "lucide-react";
+import { Send, Volume2, RefreshCcw, Radio, Zap, Users, CheckCheck } from "lucide-react";
 import { sendChatMessage, getChatMessages } from "@/app/actions/chatActions";
 
 const supabase = createClient(
@@ -34,7 +34,7 @@ export default function RadioInteractionHub() {
     { time: "22:00", title: "Nasyid Lawas", icon: "🎵" },
   ];
 
-  // ✅ FUNGSI SINKRONISASI VIRTUAL STREAM LIVE
+  // ✅ SINKRONISASI VIRTUAL STREAM LIVE
   const syncVirtualRadio = useCallback(async (shouldPlay = false) => {
     try {
       const res = await fetch("/api/get-current-radio", { cache: "no-store" });
@@ -48,10 +48,8 @@ export default function RadioInteractionHub() {
             audioContextRef.current.pause();
           }
           
-          // Inisialisasi audio baru dari Supabase Storage sesuai perintah API
           const audio = new Audio(data.audio_url);
-          // 🚀 LOMPAT SEREMPAK KE DETIK YANG SAMA DENGAN PENDENGAR LAIN!
-          audio.currentTime = data.elapsed_seconds; 
+          audio.currentTime = data.elapsed_seconds; // Lompat serempak!
           audio.muted = isMuted;
           
           audioContextRef.current = audio;
@@ -73,7 +71,7 @@ export default function RadioInteractionHub() {
     }
   }, [isMuted]);
 
-  // Handle Klik Tombol Dengarkan / Stop
+  // Handle Klik Tombol Player Besar (PUTAR RADIO)
   const handlePlayPause = () => {
     if (isPlaying) {
       if (audioContextRef.current) {
@@ -82,12 +80,10 @@ export default function RadioInteractionHub() {
       }
       setIsPlaying(false);
     } else {
-      // Saat di-play, cari tahu lagu apa yang sedang mengudara di cloud saat ini
       syncVirtualRadio(true);
     }
   };
 
-  // Sync volume & mute state
   useEffect(() => {
     if (audioContextRef.current) {
       audioContextRef.current.muted = isMuted;
@@ -96,7 +92,7 @@ export default function RadioInteractionHub() {
 
   // Load Pesan & Realtime Chat
   useEffect(() => {
-    syncVirtualRadio(false); // Cek judul program aktif pas pertama masuk web
+    syncVirtualRadio(false);
 
     const load = async () => {
       const data = await getChatMessages();
@@ -112,7 +108,6 @@ export default function RadioInteractionHub() {
         });
       }).subscribe();
 
-    // Sinkronisasi judul playlist setiap 30 detik agar jika ada pergantian acara otomatis berubah
     const interval = setInterval(() => syncVirtualRadio(false), 30000);
     
     return () => { 
@@ -156,27 +151,42 @@ export default function RadioInteractionHub() {
   return (
     <section className="max-w-7xl mx-auto my-12 px-6">
       
-      {/* 📻 TOMBOL UTAMA PLAYER (Ditaruh di atas komponen hub agar mencolok) */}
-      <div className="max-w-md mx-auto mb-8 bg-slate-900 border border-white/5 p-4 rounded-[4px] flex items-center justify-between shadow-xl">
-        <div className="flex items-center gap-3 text-left">
-          <div className={`p-3 rounded-[4px] ${isPlaying ? 'bg-emerald-500 text-slate-900 animate-pulse' : 'bg-white/5 text-emerald-400'}`}>
-            <Radio size={20} />
+      {/* 🟢 TAMPILAN UTAMA: PLAYER BESAR ASLI ANTUM (Sudah terhubung ke backend baru) */}
+      <div className="w-full bg-[#031d16] border border-emerald-500/10 p-6 md:p-8 rounded-[24px] shadow-2xl mb-8 relative overflow-hidden text-left">
+        <div className="absolute -right-10 -top-10 w-40 h-40 bg-emerald-500/5 rounded-full blur-3xl"></div>
+        
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+          <div className="flex items-center gap-5">
+            <div className="w-20 h-20 bg-slate-900 rounded-[12px] overflow-hidden border border-white/5 flex items-center justify-center shadow-inner shrink-0">
+              <img src="https://images.unsplash.com/photo-1590602847861-f357a9332bbc?q=80&w=200" alt="Studio" className="w-full h-full object-cover opacity-60" />
+            </div>
+            <div>
+              <h2 className="text-xl md:text-2xl font-black text-white uppercase tracking-tight italic leading-tight">
+                {currentPlaylist ? `SEDANG MEMUTAR: ${currentPlaylist}` : "SIARAN SEDANG OFFLINE"}
+              </h2>
+              <p className="text-[10px] md:text-xs font-black uppercase tracking-[0.2em] text-emerald-400 mt-1">
+                Radio Suara Al Muttaqin
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-[9px] font-black tracking-widest text-emerald-400 uppercase">
-              {isPlaying ? "• SEDANG MENGUDARA" : "RADIO OFFLINE / PAUSED"}
-            </p>
-            <h3 className="text-xs font-bold text-white uppercase italic">Radio Suara Al Muttaqin</h3>
+
+          <button
+            onClick={handlePlayPause}
+            className={`w-full md:w-auto min-w-[180px] py-4 px-8 rounded-[12px] text-xs font-black uppercase tracking-widest transition-all active:scale-95 shadow-xl ${
+              isPlaying 
+                ? "bg-red-500 text-white hover:bg-red-600" 
+                : "bg-emerald-500 text-slate-950 hover:bg-emerald-400"
+            }`}
+          >
+            {isPlaying ? "HENTIKAN RADIO" : "PUTAR RADIO"}
+          </button>
+        </div>
+
+        <div className="mt-6 pt-6 border-t border-white/5 flex items-center gap-6 text-slate-400 text-[11px] font-bold uppercase tracking-wider">
+          <div className="flex items-center gap-2 text-emerald-400">
+            <Users size={14} /> <span>0 Pendengar</span>
           </div>
         </div>
-        <button
-          onClick={handlePlayPause}
-          className={`px-4 py-2.5 rounded-[4px] text-[10px] font-black tracking-wider flex items-center gap-2 transition-all ${
-            isPlaying ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-emerald-400 text-slate-950 hover:bg-emerald-300'
-          }`}
-        >
-          {isPlaying ? <><Square size={12} fill="currentColor" /> STOP</> : <><Play size={12} fill="currentColor" /> DENGARKAN</>}
-        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch h-auto lg:h-[700px]">

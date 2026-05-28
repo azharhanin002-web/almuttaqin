@@ -16,57 +16,59 @@ export default function LiveSection() {
   const [listeners, setListeners] = useState(0);
 
   // ===============================
-  // FETCH VIA PROXY (Handling Offline Gracefully)
+  // ✅ SINKRONISASI VIA VIRTUAL STREAM CLOUD (Anti-Crash & Tanpa Mengubah Struktur)
   // ===============================
   useEffect(() => {
     const fetchMetadata = async () => {
       try {
-        // ✅ Menggunakan try-catch yang lebih kuat untuk menangani server offline
-        const res = await fetch("/api/nowplaying", { 
+        const res = await fetch("/api/get-current-radio", { 
           cache: "no-store",
-          // Jika dalam 5 detik tidak ada respon, anggap offline
           signal: AbortSignal.timeout(5000) 
         });
         
-        // Jika pintu API internal (route.ts) tidak merespon OK
         if (!res.ok) throw new Error("Offline");
 
         const data = await res.json();
         
-        // AzuraCast terkadang mengirim array, pastikan kita ambil data yang benar
-        const apiData = Array.isArray(data) ? data[0] : data;
-
-        if (apiData?.now_playing?.song) {
+        // Ambil data track aktif dari sistem Cron-Job database kita
+        if (data && data.active) {
           setMetadata({
-            title: apiData.now_playing.song.title || "Siaran Sedang Off",
-            artist: apiData.now_playing.song.artist || "Radio Suara Al Muttaqin",
-            art: apiData.now_playing.song.art || "/bg-player.png",
+            title: data.title || "Siaran Sedang Aktif",
+            artist: "Radio Suara Al Muttaqin",
+            art: "/bg-player.png", // Tetap mengarah ke background andalan antum
           });
+          // Simulasi angka atau antum bisa pasang counter pendengar realtime di sini nantinya
+          setListeners(1); 
+        } else {
+          // Jika di tabel database sedang tidak ada trigger cron job yang aktif
+          setMetadata({
+            title: "Siaran Sedang Offline",
+            artist: "Radio Suara Al Muttaqin",
+            art: "/bg-player.png",
+          });
+          setListeners(0);
         }
 
-        setListeners(apiData?.listeners?.current || 0);
-
       } catch (err) {
-        // ✅ FALLBACK: Jika server offline, tampilkan info standby tanpa crash aplikasi
+        // FALLBACK GENTLEMAN: Amankan UI agar tidak memicu layar merah (Digest)
         setMetadata({
           title: "Siaran Sedang Offline",
           artist: "Radio Suara Al Muttaqin",
           art: "/bg-player.png",
         });
         setListeners(0);
-        // Kita log peringatan saja, bukan error merah yang bikin crash
-        console.warn("⚠️ Hubungan ke Server Azuracast terputus.");
+        console.warn("⚠️ Hubungan ke Virtual Stream Server terputus.");
       }
     };
 
     fetchMetadata();
-    // Interval diperpanjang sedikit agar tidak membebani saat offline
+    // Jalankan pengecekan judul lagu setiap 15 detik secara berkala
     const interval = setInterval(fetchMetadata, 15000); 
     return () => clearInterval(interval);
   }, []);
 
   // ===============================
-  // ULTRA LIGHTNING SPECTRUM (Stable Version)
+  // ULTRA LIGHTNING SPECTRUM (Stable Version - 100% UTUH)
   // ===============================
   useEffect(() => {
     const canvas = canvasRef.current;
