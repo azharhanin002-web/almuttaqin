@@ -1,63 +1,66 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { crypto } from "crypto"; // Library bawaan Node.js untuk membuat UUID aman
 
 export async function POST(request: Request) {
   try {
-    // 1. AMBIL DATA DARI REQUEST BODY CRON-JOB
     const body = await request.json();
     const { title, mp3_url, duration, duration_seconds } = body;
 
-    console.log("📥 Menerima Trigger Jadwal Baru:", body);
+    console.log("📥 Menerima Request Body:", body);
 
-    // 2. VALIDASI INPUT DATA UTAMA
     if (!title || !mp3_url) {
       return NextResponse.json(
-        { error: "Judul (title) dan URL Audio (mp3_url) wajib diisi!" },
+        { error: "Parameter 'title' dan 'mp3_url' wajib dikirim!" },
         { status: 400 }
       );
     }
 
-    // 3. AMANKAN KONVERSI DURASI (Membaca fleksibel dari duration atau duration_seconds)
+    // Konversi durasi secara fleksibel dan aman
     const finalDuration = parseInt(duration || duration_seconds || "0", 10);
-
     if (isNaN(finalDuration) || finalDuration <= 0) {
       return NextResponse.json(
-        { error: "Durasi tidak valid! Harus berupa angka detik yang lebih dari 0." },
+        { error: "Durasi wajib berupa angka detik valid!" },
         { status: 400 }
       );
     }
 
-    // 4. BERSIHKAN / FLUSH JADWAL LAMA AGAR TIDAK MENUMPUK DI DATABASE
-    // Menggunakan deleteMany untuk memastikan tabel bersih sebelum siaran baru masuk
-    await prisma.radioStream.deleteMany();
+    // 🧹 1. Bersihkan tabel dengan penanganan eror mandiri
+    try {
+      await prisma.radioStream.deleteMany({});
+    } catch (dbErr) {
+      console.warn("⚠️ Gagal melakukan flush data lama (kemungkinan tabel masih kosong):", dbErr);
+    }
 
-    // 5. MASUKKAN JADWAL SIARAN BARU YANG SEREMPAK
+    // 📥 2. Insert data baru dengan ID buatan Next.js (Anti-Gagal UUID database)
+    const generatedId = crypto.randomUUID(); // Membuat string UUID standar secara instan
+
     const newStream = await prisma.radioStream.create({
       data: {
+        id: generatedId, // Paksa isi ID dari sini agar database tidak pusing menghitung uuid
         title: title,
         audio_url: mp3_url,
-        duration: finalDuration, // Masuk ke kolom database 'duration' sesuai skema prisma antum
-        start_time: new Date(),  // Detik ini dihitung sebagai waktu start live sync dunia nyata!
+        duration: finalDuration,
+        start_time: new Date(), // Menandai detik siaran dimulai serempak sekarang
       },
     });
 
-    console.log("✅ Berhasil Memperbarui Virtual Stream Database:", newStream);
-
     return NextResponse.json({
       success: true,
-      message: `Jadwal program '${title}' berhasil diaktifkan secara live!`,
+      message: "Jadwal berhasil diperbarui ke database!",
       data: newStream
     }, { status: 200 });
 
   } catch (error: any) {
-    console.error("💥 Eror fatal pada API radio-trigger:", error);
+    console.error("💥 CRASH FATAL PADA API TRIGGER:", error);
     
-    // Kembalikan detail pesan eror agar terbaca jelas di dashboard cron-job.org jika gagal lagi
+    // 💡 INI PENTING: Mengembalikan teks kesalahan asli ke cron-job agar kita tahu persis letak rusaknya
     return NextResponse.json(
       { 
         success: false, 
-        error: error.message || "Internal Server Error pada sistem API rute.",
-        meta: error.code || null
+        error: error.message || "Internal Server Error",
+        prismaCode: error.code || null,
+        stack: error.stack || null
       },
       { status: 500 }
     );
