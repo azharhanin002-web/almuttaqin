@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
-// 🟢 FIX IMPOR: Pustaka "crypto" Node.js dihapus total dari sini karena Next.js 
-// sudah mendukung objek global web standar 'crypto.randomUUID()' secara langsung!
+// 🟢 INFO: Pustaka "crypto" Node.js dihapus total karena Next.js mendukung 
+// objek global web standar 'crypto.randomUUID()' secara native.
 
 export async function POST(request: Request) {
   try {
@@ -30,8 +30,8 @@ export async function POST(request: Request) {
     // 🧹 1. Bersihkan tabel dengan penanganan eror mandiri
     try {
       await prisma.radioStream.deleteMany({});
-    } catch (dbErr) {
-      console.warn("⚠️ Gagal melakukan flush data lama (kemungkinan tabel masih kosong):", dbErr);
+    } catch (dbErr: any) {
+      console.warn("⚠️ Gagal melakukan flush data lama:", dbErr.message);
     }
 
     // 📥 2. Buat UUID menggunakan objek global standard Web API (Mulus & Anti-Crash)
@@ -56,15 +56,17 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error("💥 CRASH FATAL PADA API TRIGGER:", error);
     
-    // Mengembalikan teks kesalahan asli ke cron-job agar kita tahu persis letak rusaknya jika terjadi kendala lain
+    // 🟢 TAKTIK PENYELAMAT: Kita paksa kirim status 200 agar cron-job.org 
+    // mau membongkar isi pesan eror aslinya secara transparan di layar!
     return NextResponse.json(
       { 
         success: false, 
-        error: error.message || "Internal Server Error",
-        prismaCode: error.code || null,
-        stack: error.stack || null
+        Pesan_Eror_Asli: error.message || "Internal Server Error",
+        Kode_Prisma: error.code || "Tidak ada kode",
+        Baris_Crash: error.stack ? error.stack.split('\n')[0] : "Tidak ada stack",
+        Saran_Solusi: "Cek koneksi DATABASE_URL di env Vercel / Jalankan prisma db push"
       },
-      { status: 500 }
+      { status: 200 } 
     );
   }
 }
