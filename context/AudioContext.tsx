@@ -22,8 +22,6 @@ const AudioContext = createContext<AudioContextType | null>(null);
 
 export function AudioProvider({ children }: { children: React.ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  
-  // ✅ FIX SILENT: Menggunakan any untuk context engine agar aman dari tabrakan nama komponen & lolos compile Vercel
   const audioContextRef = useRef<any>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
@@ -119,14 +117,38 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       const data = await res.json();
 
       if (data && data.active) {
+        // 1. Set alamat file media stream baru
         audio.src = data.audio_url;
         audio.load();
-        audio.currentTime = data.elapsed_seconds;
 
-        if (audioCtx && audioCtx.state === "suspended") {
-          await audioCtx.resume();
+        // 2. Tunggu metadata audio termuat sedikit agar browser tahu durasi asli file media tersebut
+        await new Promise<void>((resolve) => {
+          const onLoadedMetadata = () => {
+            audio.removeEventListener("loadedmetadata", onLoadedMetadata);
+            resolve();
+          };
+          audio.addEventListener("loadedmetadata", onLoadedMetadata);
+          // Set batas waktu aman jika loading server tujuan lambat
+          setTimeout(resolve, 1000);
+        });
+
+        // 3. ✅ VALIDASI EMAS ANTI-HENING: Lakukan lompatan waktu serempak hanya jika valid
+        const targetTime = data.elapsed_seconds || 0;
+        if (targetTime > 0 && (!audio.duration || targetTime < audio.duration)) {
+          audio.currentTime = targetTime;
+        } else {
+          // Jika melampaui durasi asli media atau stream mati, putar aman dari awal detik 0
+          audio.currentTime = 0;
         }
 
+        // 4. ✅ BANGUNKAN CONTEXT ENGINE: Paksa lepas dari status suspended browser
+        if (audioCtx) {
+          if (audioCtx.state === "suspended") {
+            await audioCtx.resume();
+          }
+        }
+
+        // 5. Eksekusi putar media stream
         await audio.play();
         setIsPlaying(true);
         setHasError(false);
