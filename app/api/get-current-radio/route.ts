@@ -12,7 +12,7 @@ const FILLER_PLAYLIST = [
   },
   {
     title: "Murottal Jeda - Surah Al-Waqiah",
-    url: "https://xxxx.supabase.co/storage/v1/object/public/radio-audio/al_waqiah.mp3",
+    url: "https://sdit.my.id/radio/Rikhie-Asbo.mp3",
     duration: 300, // 5 menit
   },
   {
