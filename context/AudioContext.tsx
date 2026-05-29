@@ -117,7 +117,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       const data = await res.json();
 
       if (data && data.active) {
-        // 1. Set alamat file media stream baru
+        // 1. Set alamat file media stream baru dari Hawkhost
         audio.src = data.audio_url;
         audio.load();
 
@@ -132,7 +132,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
           setTimeout(resolve, 1000);
         });
 
-        // 3. ✅ VALIDASI EMAS ANTI-HENING: Lakukan lompatan waktu serempak hanya jika valid
+        // 3. VALIDASI EMAS ANTI-HENING: Lakukan lompatan waktu serempak hanya jika valid
         const targetTime = data.elapsed_seconds || 0;
         if (targetTime > 0 && (!audio.duration || targetTime < audio.duration)) {
           audio.currentTime = targetTime;
@@ -141,7 +141,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
           audio.currentTime = 0;
         }
 
-        // 4. ✅ BANGUNKAN CONTEXT ENGINE: Paksa lepas dari status suspended browser
+        // 4. BANGUNKAN CONTEXT ENGINE: Paksa lepas dari status suspended browser
         if (audioCtx) {
           if (audioCtx.state === "suspended") {
             await audioCtx.resume();
@@ -203,6 +203,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     <AudioContext.Provider value={{ isPlaying, hasError, metadata, listeners, togglePlay, analyserRef }}>
       <audio
         ref={audioRef}
+        crossOrigin="anonymous" // 🟢 KUNCI UTAMA: Wajib dipasang kembali agar Web Audio API diizinkan bersuara!
         preload="none"
         onPause={() => setIsPlaying(false)}
         onPlay={() => {
