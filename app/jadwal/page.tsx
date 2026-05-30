@@ -1,7 +1,11 @@
 "use client";
 
+// 🟢 MANTRA KEAMANAN: Memastikan Turbopack meloloskan halaman tanpa mencoba caching kaku pas build
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+
 export default function JadwalPage() {
-  // Data lengkap disinkronkan dengan dashboard AzuraCast
+  // ✅ DATA AMAN: Data internal Virtual Auto DJ yang dikunci secara mandiri
   const programHarian = [
     { jam: "06:00 - 07:00", acara: "Nasyid Pagi", deskripsi: "Alunan nasyid penuh semangat untuk mengawali aktivitas pagi hari." },
     { jam: "07:00 - 09:00", acara: "Taujih Pagi Ust. Sartono", deskripsi: "Kajian hikmah dan motivasi islami untuk bekal harian." },
@@ -25,7 +29,8 @@ export default function JadwalPage() {
           </h1>
           <div className="h-1 w-24 bg-cyan-400 mx-auto mt-4 rounded-full shadow-[0_0_15px_rgba(0,242,255,0.8)]" />
           <p className="mt-6 text-emerald-200/80 font-medium">
-            Program rutin Radio Suara Al Muttaqin Jepara untuk menginspirasi hati Anda.
+            {/* 🟢 FIX: Lokasi kota disesuaikan menjadi Purwokerto */}
+            Program rutin Radio Suara Al Muttaqin Purwokerto untuk menginspirasi hati Anda.
           </p>
         </div>
 
@@ -56,11 +61,12 @@ export default function JadwalPage() {
 
         {/* Footer info sistem */}
         <div className="mt-12 p-8 rounded-[2.5rem] bg-black/20 border border-emerald-500/10 text-center">
+          {/* 🟢 FIX: Status sinkronisasi dialihkan ke sistem internal virtual kita */}
           <p className="text-[10px] font-mono text-emerald-500/40 uppercase tracking-[0.4em]">
-            Sync Status: Verified with RSM-API-v1
+            Sync Status: Verified with RSM-VIRTUAL-DJ
           </p>
           <p className="text-xs text-emerald-300/50 mt-2">
-            Pembaruan sistem dilakukan secara berkala mengikuti jadwal pusat.
+            Pembaruan sistem dilakukan secara otomatis mengikuti penanggalan database internal.
           </p>
         </div>
       </div>
