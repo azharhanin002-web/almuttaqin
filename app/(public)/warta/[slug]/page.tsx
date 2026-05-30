@@ -10,6 +10,10 @@ import RelatedPost from "@/components/RelatedPost";
 import CommentSection from "@/components/CommentSection";
 import Ads from "@/components/Ads";
 
+// ✅ AMAN: Mengunci halaman detail ke mode dinamis penuh untuk membantai prerender error pas build Vercel
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+
 /**
  * TYPE DEFINITION
  */
@@ -34,33 +38,42 @@ function readingTime(text: string | null | undefined) {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params; // ✅ Await params wajib di Next.js 15+
   
-  const article = await prisma.info.findUnique({ 
-    where: { slug }, 
-    include: { category: true } 
-  });
-  
-  if (!article) return { title: "Artikel Tidak Ditemukan | Radio RSM" };
-  
-  // Ambil cuplikan teks bersih untuk description
-  const plainText = article.content ? article.content.replace(/<[^>]+>/g, "").slice(0, 160) : "";
-  
-  return {
-    title: `${article.title} | Radio Suara Al Muttaqin`,
-    description: plainText,
-    alternates: { canonical: `https://radioalmuttaqin.com/warta/${article.slug}` },
-    openGraph: { 
-      title: article.title, 
-      description: plainText, 
-      images: [{ url: article.thumbnail || "/og-default.jpg" }], 
-      type: "article" 
-    },
-    twitter: {
-      card: "summary_large_image",
-      title: article.title,
+  try {
+    const article = await prisma.info.findUnique({ 
+      where: { slug }, 
+      include: { category: true } 
+    });
+    
+    if (!article) return { title: "Artikel Tidak Ditemukan | Radio RSM" };
+    
+    // Ambil cuplikan teks bersih untuk description
+    const plainText = article.content ? article.content.replace(/<[^>]+>/g, "").slice(0, 160) : "";
+    
+    // Antidote domain lama untuk meta image
+    const metaImage = article.thumbnail && !article.thumbnail.includes("rsm.my.id") 
+      ? article.thumbnail 
+      : "https://radioalmuttaqin.com/og-default.jpg"; // alihkan ke og default jika masih rsm.my.id
+    
+    return {
+      title: `${article.title} | Radio Suara Al Muttaqin`,
       description: plainText,
-      images: [article.thumbnail || "/og-default.jpg"],
-    }
-  };
+      alternates: { canonical: `https://radioalmuttaqin.com/warta/${article.slug}` },
+      openGraph: { 
+        title: article.title, 
+        description: plainText, 
+        images: [{ url: metaImage }], 
+        type: "article" 
+      },
+      twitter: {
+        card: "summary_large_image",
+        title: article.title,
+        description: plainText,
+        images: [metaImage],
+      }
+    };
+  } catch (error) {
+    return { title: "Radio Suara Al Muttaqin Purwokerto" };
+  }
 }
 
 /**
@@ -69,7 +82,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function ArticleDetailPage({ params, searchParams }: Props) {
   // ✅ 1. Await dynamic APIs
   const { slug } = await params;
-  await searchParams; // Await walau tidak digunakan untuk stabilitas server-side
+  await searchParams; // Await untuk stabilitas server-side
 
   // ✅ 2. Parallel Data Fetching
   const [article, popular] = await Promise.all([
@@ -106,6 +119,10 @@ export default async function ArticleDetailPage({ params, searchParams }: Props)
     secondPart = content.slice(cutPoint);
   }
 
+  // Pengaman URL domain lama untuk gambar utama
+  const hasBadMainDomain = article.thumbnail && article.thumbnail.includes("rsm.my.id");
+  const safeMainThumbnail = hasBadMainDomain ? "/bg-player.png" : article.thumbnail;
+
   return (
     <>
       <ReadingProgress />
@@ -132,6 +149,7 @@ export default async function ArticleDetailPage({ params, searchParams }: Props)
             <div className="flex items-center gap-3 text-slate-400 font-bold uppercase text-[10px] tracking-wider border-t border-slate-50 pt-5">
               
               <div className="flex items-center gap-2">
+                {/* Tetap menggunakan Image Next.js karena memuat Aset Lokal internal, 100% Aman */}
                 <Image 
                   src="/icon.png" 
                   alt="Icon RSM" 
@@ -151,10 +169,19 @@ export default async function ArticleDetailPage({ params, searchParams }: Props)
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
             <div className="lg:col-span-8">
-              {article.thumbnail && (
+              {safeMainThumbnail && (
                 <div className="mb-12 overflow-hidden rounded-[4px] border border-slate-50 shadow-2xl shadow-slate-100">
                   <div className="relative aspect-video w-full">
-                    <Image src={article.thumbnail} alt={article.title} fill className="object-cover" priority />
+                    {/* 🟢 FIX UTAMA: Menggunakan tag img standar untuk membantai bypass proses static download pas build Vercel */}
+                    <img 
+                      src={safeMainThumbnail} 
+                      alt={article.title || "Thumbnail"} 
+                      loading="eager"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = "/bg-player.png";
+                      }}
+                      className="w-full h-full object-cover" 
+                    />
                   </div>
                 </div>
               )}
@@ -201,29 +228,43 @@ export default async function ArticleDetailPage({ params, searchParams }: Props)
                   </div>
 
                   <div className="space-y-6">
-                    {popular.map((item) => (
-                      <Link 
-                        href={`/warta/${item.slug}`} 
-                        key={item.id} 
-                        className="group flex gap-4 items-center pb-6 border-b border-slate-50 last:border-0 last:pb-0"
-                      >
-                        <div className="relative w-16 h-16 shrink-0 overflow-hidden rounded-[4px] bg-slate-100 border border-slate-50">
-                          {item.thumbnail ? (
-                            <Image src={item.thumbnail} alt={item.title} fill className="object-cover group-hover:scale-110 transition-transform duration-500" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-[10px] font-black text-slate-300">RSM</div>
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <h5 className="text-[13px] font-black text-slate-800 leading-tight group-hover:text-emerald-600 transition-colors line-clamp-2 tracking-tight">
-                            {item.title}
-                          </h5>
-                          <time className="text-[9px] text-slate-400 mt-2 block font-black uppercase tracking-widest">
-                            {new Date(item.created_at).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}
-                          </time>
-                        </div>
-                      </Link>
-                    ))}
+                    {popular.map((item) => {
+                      const hasBadSidebarDomain = item.thumbnail && item.thumbnail.includes("rsm.my.id");
+                      const safeSidebarThumbnail = hasBadSidebarDomain ? "/bg-player.png" : item.thumbnail;
+
+                      return (
+                        <Link 
+                          href={`/warta/${item.slug}`} 
+                          key={item.id} 
+                          className="group flex gap-4 items-center pb-6 border-b border-slate-50 last:border-0 last:pb-0"
+                        >
+                          <div className="relative w-16 h-16 shrink-0 overflow-hidden rounded-[4px] bg-slate-100 border border-slate-50">
+                            {safeSidebarThumbnail ? (
+                              /* 🟢 FIX KEDUA: Menggunakan tag img standar pada loop sidebar terpopuler */
+                              <img 
+                                src={safeSidebarThumbnail} 
+                                alt={item.title || "Popular Post"} 
+                                loading="lazy"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = "/bg-player.png";
+                                }}
+                                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-[10px] font-black text-slate-300">RSM</div>
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <h5 className="text-[13px] font-black text-slate-800 leading-tight group-hover:text-emerald-600 transition-colors line-clamp-2 tracking-tight">
+                              {item.title}
+                            </h5>
+                            <time className="text-[9px] text-slate-400 mt-2 block font-black uppercase tracking-widest">
+                              {item.created_at ? new Date(item.created_at).toLocaleDateString("id-ID", { day: "numeric", month: "short" }) : "--:--"}
+                            </time>
+                          </div>
+                        </Link>
+                      );
+                    })}
                   </div>
                 </section>
               </div>
