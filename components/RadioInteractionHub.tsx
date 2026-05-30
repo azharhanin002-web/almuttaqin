@@ -232,13 +232,13 @@ export default function RadioInteractionHub() {
             {!user ? (
               <div className="flex flex-col sm:flex-row items-center justify-between p-3 bg-[#v border border-emerald-100/30 rounded-xl gap-3 w-full">
                 <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide text-left">
-                  Silakan masuk akun terlebih dahulu untuk mengirim pesan komunitas, Fal.
+                  Silakan masuk akun terlebih dahulu untuk mengirim pesan komunitas.
                 </p>
                 <Link
                   href="/login"
                   className="inline-flex items-center gap-2 bg-[#00a884] hover:bg-[#06cf9c] text-white font-black text-[10px] uppercase tracking-widest px-5 py-3 rounded-xl shadow-md transition-all whitespace-nowrap active:scale-95"
                 >
-                  <LogIn size={12} /> Login Jemaah
+                  <LogIn size={12} /> Login
                 </Link>
               </div>
             ) : (
