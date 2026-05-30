@@ -111,7 +111,7 @@ export default function RadioInteractionHub() {
     const messageContent = newMessage.trim();
 
     try {
-      // 🚀 KIRIM KE SERVER ACTION: Sekarang dijamin lolos RLS karena nama sinkron dengan sesi provider
+      // 🚀 KIRIM KE SERVER ACTION: Menggunakan modul kuki SSR @supabase/ssr yang baru saja kita instal
       const result = await sendChatMessage(username, messageContent);
       
       if (result && result.success) {
@@ -124,7 +124,8 @@ export default function RadioInteractionHub() {
     } catch (err) {
       console.error("💥 Eror pengiriman pesan dakwah:", err);
       alert("Gagal kirim pesan, silakan segarkan halaman dan coba lagi.");
-    } {
+    } finally {
+      // 🟢 FIX UTAMA: Menyematkan block 'finally' yang sah agar state loading ditutup dengan selamat
       setIsSending(false);
     }
   };
@@ -227,10 +228,11 @@ export default function RadioInteractionHub() {
             })}
           </div>
 
-          {/* Form Input Chat & Nama (Proteksi Sesi Logged-In) */}
+          {/* Form Input Chat & Nama */}
           <div className="p-3 bg-[#f0f2f5] border-t border-slate-200">
             {!user ? (
-              <div className="flex flex-col sm:flex-row items-center justify-between p-3 bg-[#v border border-emerald-100/30 rounded-xl gap-3 w-full">
+              // 🟢 FIX VISUAL: Membetulkan typo background color div dari bg-[#v ke emerald-50/60
+              <div className="flex flex-col sm:flex-row items-center justify-between p-3 bg-emerald-50/60 border border-emerald-100/30 rounded-xl gap-3 w-full">
                 <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide text-left">
                   Silakan masuk akun terlebih dahulu untuk mengirim pesan komunitas.
                 </p>
