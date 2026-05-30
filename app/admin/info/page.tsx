@@ -12,6 +12,8 @@ import {
   ExternalLink,
 } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 export default function InfoPage() {
   const [infos, setInfos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

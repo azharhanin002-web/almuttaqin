@@ -4,6 +4,8 @@ import LogoutButton from "@/components/LogoutButton";
 import AdminMapWrapper from "@/components/AdminMapWrapper";
 import ListenerTable from "@/components/ListenerTable";
 
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 export default async function AdminDashboard() {
   // 1. QUERY DATABASE PARALEL
   const [totalRequests, pendingRequests, totalInfo] =

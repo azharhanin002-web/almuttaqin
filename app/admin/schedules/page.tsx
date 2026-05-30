@@ -1,6 +1,8 @@
 import prisma from "@/lib/prisma";
 import { addSchedule, deleteSchedule } from "./actions";
 
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 export default async function SchedulesPage() {
   // 1. Ambil data dengan model 'schedule' (tunggal)
   const schedules = await prisma.schedule.findMany({
