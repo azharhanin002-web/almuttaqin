@@ -52,10 +52,11 @@ export default function LivePlayer() {
         >
           {isPlaying ? (
             <>
-              <div className="flex gap-1.5 items-center">
-                <span className="w-1.5 h-4 bg-white rounded-full animate-[bounce_1s_infinite_100ms]"></span>
-                <span className="w-1.5 h-5 bg-white rounded-full animate-[bounce_1s_infinite_300ms]"></span>
-                <span className="w-1.5 h-4 bg-white rounded-full animate-[bounce_1s_infinite_500ms]"></span>
+              {/* Equalizer Bar Efek Studio - Memantul dari dasar bawah */}
+              <div className="flex gap-1 items-end h-4 mb-0.5">
+                <span className="w-1 bg-white rounded-full animate-[pulse_0.8s_infinite_100ms]" style={{ height: '50%' }}></span>
+                <span className="w-1 bg-white rounded-full animate-[pulse_0.5s_infinite_300ms]" style={{ height: '100%' }}></span>
+                <span className="w-1 bg-white rounded-full animate-[pulse_0.7s_infinite_500ms]" style={{ height: '70%' }}></span>
               </div>
               <span className="drop-shadow-md">Berhenti</span>
             </>
