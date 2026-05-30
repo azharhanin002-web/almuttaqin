@@ -5,7 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 
 // 🟢 SOLUSI MUTLAK: Copas langsung token panjang Service Role rahasia antum dari dashboard Vercel/Supabase ke sini
-const supabaseServiceKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVhcHFlbXVjYjkiLCJyb2xlIjoic2VydmljZV9yb2xlIiwiaWF0IjoxNzg1ZSI6InN0cm9uZyIsInN0YXR1cyI6ImActiveM1Tc4MDA0NDk0MywiZXhwIjoyMDI1Mjk1YwQzd8Zo9LzLFzweojPTn3LqWFs5z4"; 
+const supabaseServiceKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVhc2Zyc3RjZWp1aXB6dHJqaXhpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDA0NDk0MywiZXhwIjoyMDk1NjIwOTQzfQ.jWE2626XaKS5YgWQzd8Zo9LzLFzweojPTn3LqWFs5z4"; 
 
 // Membuat client admin bypass RLS tingkat tinggi
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
