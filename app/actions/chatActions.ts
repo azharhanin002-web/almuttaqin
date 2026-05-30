@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 
 /**
  * FUNGSI INTI: Menginisialisasi Supabase Client berbasis Server (SSR)
- * Memastikan kuki sesi login Google/GitHub jemaah ikut terbawa ke database
+ * Otomatis menyedot kuki sesi login Google/GitHub jemaah langsung ke server Next.js
  */
 async function getSupabaseServer() {
   const cookieStore = await cookies();
@@ -34,7 +34,7 @@ async function getSupabaseServer() {
 
 /**
  * FUNGSI KIRIM PESAN DAKWAH (SERVER-SIDE)
- * Terintegrasi penuh dengan keamanan RLS Supabase Auth
+ * Terintegrasi penuh dengan keamanan ketat RLS Supabase Auth
  */
 export async function sendChatMessage(username: string, message: string) {
   if (!username.trim() || !message.trim()) {
@@ -44,7 +44,7 @@ export async function sendChatMessage(username: string, message: string) {
   try {
     const supabase = await getSupabaseServer();
 
-    // 🚀 TEMBAK KE TABEL YANG SAMA DENGAN REALTIME: chat_messages
+    // 🚀 TEMBAK KE TABEL: chat_messages (Lolos saringan RLS authenticated)
     const { data, error } = await supabase
       .from("chat_messages")
       .insert([
