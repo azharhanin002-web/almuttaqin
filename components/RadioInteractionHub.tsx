@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { Send, RefreshCcw, Radio, Zap, Users, CheckCheck } from "lucide-react";
+import { Send, RefreshCcw, Radio, Zap, Users, CheckCheck, LogIn } from "lucide-react";
 import { sendChatMessage, getChatMessages } from "@/app/actions/chatActions";
+import Link from "next/link";
 
 // Inisialisasi Supabase Client dengan jaminan Non-Crash
 const supabase = createClient(
@@ -19,6 +20,7 @@ export default function RadioInteractionHub() {
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [username, setUsername] = useState("");
+  const [user, setUser] = useState<any>(null);
   const [isSending, setIsSending] = useState(false);
   
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -52,13 +54,32 @@ export default function RadioInteractionHub() {
 
   useEffect(() => {
     syncVirtualRadioName();
+    
     const load = async () => {
       const data = await getChatMessages();
       setMessages(data || []);
     };
     load();
 
-    // 🟢 REALTIME HUB: Menghubungkan gerbang chat langsung ke database baru Supabase antum
+    // 🟢 SINKRONISASI AUTENTIKASI: Mengambil data identitas nama jemaah asli dari Supabase Auth
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser(session.user);
+        setUsername(session.user.user_metadata.full_name || session.user.user_metadata.name || "Jemaah Al Muttaqin");
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser(session.user);
+        setUsername(session.user.user_metadata.full_name || session.user.user_metadata.name || "Jemaah Al Muttaqin");
+      } else {
+        setUser(null);
+        setUsername("");
+      }
+    });
+
+    // REALTIME HUB: Sinkronisasi alur data pesan baru tanpa refresh
     const channel = supabase.channel("live_chat_radio")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, (p) => {
         setMessages((prev) => {
@@ -68,7 +89,9 @@ export default function RadioInteractionHub() {
       }).subscribe();
 
     const interval = setInterval(syncVirtualRadioName, 30000);
+
     return () => { 
+      subscription.unsubscribe();
       supabase.removeChannel(channel); 
       clearInterval(interval);
     };
@@ -84,33 +107,36 @@ export default function RadioInteractionHub() {
     e.preventDefault();
     if (!newMessage.trim() || !username.trim() || isSending) return;
 
-    const tempMsg = {
-      id: Math.random().toString(),
-      username: username,
-      message: newMessage,
-      created_at: new Date().toISOString(),
-      isOptimistic: true
-    };
-    setMessages(prev => [...prev, tempMsg]);
-    setNewMessage("");
-
     setIsSending(true);
-    const result = await sendChatMessage(username, newMessage);
-    if (!result.success) {
-      setMessages(prev => prev.filter(m => m.id !== tempMsg.id));
-      alert("Gagal kirim pesan dakwah!");
+    const messageContent = newMessage.trim();
+
+    try {
+      // 🚀 KIRIM KE SERVER ACTION: Sekarang dijamin lolos RLS karena nama sinkron dengan sesi provider
+      const result = await sendChatMessage(username, messageContent);
+      
+      if (result && result.success) {
+        setNewMessage("");
+        const freshData = await getChatMessages();
+        setMessages(freshData || []);
+      } else {
+        alert("Waduh Fal, gagal kirim pesan. Periksa kembali kebijakan RLS tabel chat_messages!");
+      }
+    } catch (err) {
+      console.error("💥 Eror pengiriman pesan dakwah:", err);
+      alert("Gagal kirim pesan, silakan segarkan halaman dan coba lagi.");
+    } {
+      setIsSending(false);
     }
-    setIsSending(false);
   };
 
   return (
-    <section className="max-w-7xl mx-auto my-6 px-6">
+    <section className="max-w-7xl mx-auto my-6 px-6 font-sans">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch h-auto lg:h-[700px]">
         
         {/* =========================================================
             JADWAL SIARAN (Panel Kiri)
             ========================================================= */}
-        <div className="lg:col-span-4 bg-slate-900 rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-white/5">
+        <div className="lg:col-span-4 bg-slate-900 rounded-3xl shadow-2xl border-b-4 border-slate-950 flex flex-col overflow-hidden border border-white/5">
           <div className="p-5 bg-emerald-950 flex items-center justify-between border-b border-emerald-500/30">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-emerald-500/20 rounded-xl">
@@ -122,7 +148,6 @@ export default function RadioInteractionHub() {
           
           <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
             {scheduleData.map((prog, index) => {
-              // 🟢 OPTIMASI MATCHING: Supaya fleksibel mendeteksi "Keluarga Sakinah" vs "Kajian Keluarga Sakinah"
               const isLive = currentPlaylist && (
                 currentPlaylist.toLowerCase().includes(prog.title.toLowerCase()) ||
                 prog.title.toLowerCase().includes(currentPlaylist.toLowerCase())
@@ -164,7 +189,7 @@ export default function RadioInteractionHub() {
             </div>
           </div>
 
-          {/* Area Isi Pesan Chat (Menggunakan SVG Pattern Ringan Aman Anti-Broken-Link) */}
+          {/* Area Isi Pesan Chat */}
           <div 
             ref={scrollRef} 
             className="flex-1 overflow-y-auto p-4 md:p-6 space-y-3 custom-scrollbar text-left relative bg-opacity-40"
@@ -186,9 +211,9 @@ export default function RadioInteractionHub() {
                     <div className={`absolute top-0 w-0 h-0 border-t-[8px] border-t-transparent ${
                       isMe ? "left-full border-l-[8px] border-l-[#dcf8c6]" : "right-full border-r-[8px] border-r-white"
                     }`} />
-                    {!isMe && <p className="text-[11px] font-black text-emerald-800 mb-0.5 tracking-tight">{sender}</p>}
+                    {!isMe && <p className="text-[11px] font-black text-emerald-800 mb-0.5 tracking-tight text-left">{sender}</p>}
                     <div className="flex items-end gap-3 justify-between">
-                      <p className="text-[14px] text-[#111b21] leading-relaxed break-words min-w-[50px]">{text}</p>
+                      <p className="text-[14px] text-[#111b21] leading-relaxed break-words min-w-[50px] text-left">{text}</p>
                       <div className="flex items-center gap-1 shrink-0 pb-0.5">
                         <span className="text-[9px] text-[#667781] font-medium">
                           {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "--:--"}
@@ -202,34 +227,48 @@ export default function RadioInteractionHub() {
             })}
           </div>
 
-          {/* Form Input Chat & Nama */}
-          <form onSubmit={handleSendChat} className="p-3 bg-[#f0f2f5] border-t border-slate-200">
-            <div className="flex gap-2 items-center">
-              <input
-                type="text" 
-                placeholder="Nama..." 
-                value={username} 
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-1/4 px-4 py-3 bg-white border-none rounded-xl text-[12px] font-bold text-slate-800 outline-none focus:ring-1 focus:ring-emerald-500 transition-all shadow-sm"
-                required
-              />
-              <input
-                type="text" 
-                placeholder="Tulis pesan dakwah di sini..." 
-                value={newMessage} 
-                onChange={(e) => setNewMessage(e.target.value)}
-                className="flex-1 px-4 py-3 bg-white border-none rounded-xl text-[13px] text-slate-800 outline-none focus:ring-1 focus:ring-emerald-500 transition-all shadow-sm"
-                required
-              />
-              <button 
-                type="submit" 
-                disabled={isSending} 
-                className="bg-[#00a884] hover:bg-[#06cf9c] text-white w-12 h-12 rounded-full shadow-md transition-all active:scale-90 flex items-center justify-center shrink-0 cursor-pointer select-none"
-              >
-                {isSending ? <RefreshCcw size={18} className="animate-spin" /> : <Send size={18} className="ml-0.5" />}
-              </button>
-            </div>
-          </form>
+          {/* Form Input Chat & Nama (Proteksi Sesi Logged-In) */}
+          <div className="p-3 bg-[#f0f2f5] border-t border-slate-200">
+            {!user ? (
+              <div className="flex flex-col sm:flex-row items-center justify-between p-3 bg-[#v border border-emerald-100/30 rounded-xl gap-3 w-full">
+                <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wide text-left">
+                  Silakan masuk akun terlebih dahulu untuk mengirim pesan komunitas, Fal.
+                </p>
+                <Link
+                  href="/login"
+                  className="inline-flex items-center gap-2 bg-[#00a884] hover:bg-[#06cf9c] text-white font-black text-[10px] uppercase tracking-widest px-5 py-3 rounded-xl shadow-md transition-all whitespace-nowrap active:scale-95"
+                >
+                  <LogIn size={12} /> Login Jemaah
+                </Link>
+              </div>
+            ) : (
+              <form onSubmit={handleSendChat} className="flex gap-2 items-center">
+                <input
+                  type="text" 
+                  value={username} 
+                  disabled
+                  title="Nama Anda terkunci otomatis oleh sistem login"
+                  className="w-1/4 px-4 py-3 bg-slate-100 border-none rounded-xl text-[12px] font-bold text-slate-500 outline-none cursor-not-allowed select-none shadow-inner"
+                />
+                <input
+                  type="text" 
+                  placeholder="Tulis pesan dakwah di sini..." 
+                  value={newMessage} 
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  disabled={isSending}
+                  className="flex-1 px-4 py-3 bg-white border-none rounded-xl text-[13px] text-slate-800 outline-none focus:ring-1 focus:ring-emerald-500 transition-all shadow-sm"
+                  required
+                />
+                <button 
+                  type="submit" 
+                  disabled={isSending || !newMessage.trim()} 
+                  className="bg-[#00a884] hover:bg-[#06cf9c] text-white w-12 h-12 rounded-full shadow-md transition-all active:scale-90 flex items-center justify-center shrink-0 cursor-pointer select-none disabled:bg-slate-300"
+                >
+                  {isSending ? <RefreshCcw size={18} className="animate-spin" /> : <Send size={18} className="ml-0.5" />}
+                </button>
+              </form>
+            )}
+          </div>
         </div>
 
       </div>
