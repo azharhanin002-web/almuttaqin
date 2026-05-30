@@ -1,54 +1,75 @@
-import { MetadataRoute } from 'next';
 import prisma from "@/lib/prisma";
 
-/**
- * GENERATE DYNAMIC SITEMAP
- * Membantu Google mengindeks halaman statis dan seluruh artikel Warta Pondok secara otomatis.
- */
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = 'https://almuttaqinjepara.vercel.app'; // Domain utama antum
+// 🟢 MANTRA PENYELAMAT: Memaksa sitemap digenerate secara dinamis saat diakses jemaah / bot Google
+// Ini akan membantai eror ENOIDENTIFIER selamanya dari proses build Vercel!
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 
-  // 1. Ambil seluruh slug artikel yang sudah diterbitkan (publish)
-  const articles = await prisma.info.findMany({
-    where: { 
-      status: "publish",
-      is_active: true 
-    },
-    select: {
-      slug: true,
-      updated_at: true,
-    },
-  });
+export async function GET() {
+  const baseUrl = "https://radioalmuttaqin.com";
 
-  // 2. Petakan artikel ke format sitemap
-  const articleUrls = articles.map((article) => ({
-    url: `${baseUrl}/warta/${article.slug}`,
-    lastModified: article.updated_at,
-    changeFrequency: 'weekly' as const,
-    priority: 0.7,
-  }));
+  try {
+    // Tarik daftar slug artikel dari Supabase
+    const articles = await prisma.info.findMany({
+      where: {
+        status: { in: ["publish", "published"] },
+        is_active: true,
+      },
+      select: {
+        slug: true,
+        created_at: true,
+      },
+    });
 
-  // 3. Daftar Halaman Statis Utama
-  const staticPaths = [
-    {
-      url: baseUrl,
-      lastModified: new Date(),
-      changeFrequency: 'daily' as const,
-      priority: 1.0, // Halaman utama adalah prioritas tertinggi
-    },
-    {
-      url: `${baseUrl}/jadwal`,
-      lastModified: new Date(),
-      changeFrequency: 'weekly' as const,
-      priority: 0.8,
-    },
-    {
-      url: `${baseUrl}/request-lagu`,
-      lastModified: new Date(),
-      changeFrequency: 'monthly' as const,
-      priority: 0.5,
-    },
-  ];
+    // Rancang dokumen XML sitemap secara dinamis
+    const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>
+    <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+      <url>
+        <loc>${baseUrl}</loc>
+        <changefreq>daily</changefreq>
+        <priority>1.0</priority>
+      </url>
+      <url>
+        <loc>${baseUrl}/jadwal</loc>
+        <changefreq>weekly</changefreq>
+        <priority>0.8</priority>
+      </url>
+      <url>
+        <loc>${baseUrl}/warta</loc>
+        <changefreq>daily</changefreq>
+        <priority>0.8</priority>
+      </url>
+      ${articles
+        .map((art) => `
+        <url>
+          <loc>${baseUrl}/warta/${art.slug}</loc>
+          <lastmod>${new Date(art.created_at).toISOString()}</lastmod>
+          <changefreq>monthly</changefreq>
+          <priority>0.6</priority>
+        </url>
+        `).join("")}
+    </urlset>`;
 
-  return [...staticPaths, ...articleUrls];
+    // Kembalikan sebagai dokumen XML murni
+    return new Response(sitemapXml, {
+      headers: {
+        "Content-Type": "application/xml",
+        "Cache-Control": "public, max-age=86400, s-maxage=86400, stale-while-revalidate=43200",
+      },
+    });
+  } catch (error) {
+    console.error("💥 Gagal merakit sitemap dinamis:", error);
+    
+    // Fallback sitemap standar jika database terputus, agar sitemap.xml TIDAK CRASH (Biar Google SEO aman)
+    const fallbackXml = `<?xml version="1.0" encoding="UTF-8"?>
+    <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+      <url><loc>${baseUrl}</loc><priority>1.0</priority></url>
+      <url><loc>${baseUrl}/jadwal</loc><priority>0.8</priority></url>
+      <url><loc>${baseUrl}/warta</loc><priority>0.8</priority></url>
+    </urlset>`;
+
+    return new Response(fallbackXml, {
+      headers: { "Content-Type": "application/xml" },
+    });
+  }
 }
