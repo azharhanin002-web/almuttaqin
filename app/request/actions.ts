@@ -1,40 +1,55 @@
 "use server";
 
-import prisma from "@/lib/prisma";
-import { revalidatePath } from "next/cache";
+import { createClient } from "@supabase/supabase-js";
 
 export async function submitRequest(formData: FormData) {
-  // Ambil data dari form
-  const name = formData.get("name") as string;
-  const category = formData.get("category") as string;
-  const song_title = formData.get("song_title") as string; // PERBAIKAN: Harus 'song_title' agar sinkron dengan form
-  const messageInput = formData.get("message") as string;
-
-  // Standarisasi agar Admin mudah membaca di dashboard
-  const fullTitle = `[${category}] ${song_title}`;
-
   try {
-    // PERBAIKAN: Gunakan 'songRequest' (camelCase) sesuai Model SongRequest di schema.prisma
-    await prisma.songRequest.create({
-      data: {
-        name: name,
-        song_title: fullTitle,
-        message: messageInput || "-",
-        status: "pending", // Default status agar muncul di 'Request Pending' dashboard
-      },
-    });
+    const name = String(formData.get("name") || "").trim();
+    const category = String(formData.get("category") || "").trim();
+    const song_title = String(formData.get("song_title") || "").trim();
+    const message = String(formData.get("message") || "").trim();
 
-    /**
-     * Revalidasi Path
-     * '/admin' untuk mengupdate angka statistik di dashboard utama
-     * '/admin/requests' untuk mengupdate daftar tabel request
-     */
-    revalidatePath("/admin"); 
-    revalidatePath("/admin/requests");
-    
-    return { success: true };
+    // Validasi sederhana
+    if (!name || !category || !song_title) {
+      return {
+        success: false,
+        error: "Data wajib belum lengkap.",
+      };
+    }
+
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    const { error } = await supabase
+      .from("song_requests")
+      .insert({
+        name,
+        category,
+        song_title,
+        message: message || null,
+        status: "pending",
+      });
+
+    if (error) {
+      console.error("Supabase Insert Error:", error);
+
+      return {
+        success: false,
+        error: "Gagal menyimpan request.",
+      };
+    }
+
+    return {
+      success: true,
+    };
   } catch (error) {
-    console.error("Gagal mengirim request ke Supabase:", error);
-    return { success: false, error: "Terjadi kesalahan sistem. Coba lagi ya!" };
+    console.error("Submit Request Error:", error);
+
+    return {
+      success: false,
+      error: "Terjadi kesalahan pada server.",
+    };
   }
 }
