@@ -22,11 +22,14 @@ const AudioContext = createContext<AudioContextType | null>(null);
 
 export function AudioProvider({ children }: { children: React.ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioContextRef = useRef<any>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+
   const isInitialized = useRef(false);
-  const lastSyncedUrlRef = useRef<string>("");
+  const lastSyncedUrlRef = useRef("");
+  const userStoppedRef = useRef(false);
+  const isAutoSwitchingRef = useRef(false);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -37,14 +40,28 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     art: "/bg-player.png",
   });
 
+  const fetchCurrentRadio = useCallback(async () => {
+    const res = await fetch("/api/get-current-radio", { cache: "no-store" });
+
+    if (!res.ok) {
+      throw new Error("Radio API offline");
+    }
+
+    return res.json();
+  }, []);
+
   const applyRadioDataToAudio = useCallback(
     async (data: any, forceReload = false) => {
-      if (!audioRef.current || !data?.active || !data.audio_url) return false;
+      if (!audioRef.current || !data?.active || !data.audio_url) {
+        return false;
+      }
 
       const audio = audioRef.current;
       const audioCtx = audioContextRef.current;
+
       const nextSrc = new URL(data.audio_url, window.location.href).href;
       const currentSrc = audio.src;
+
       const targetTime = Number(data.elapsed_seconds || 0);
       const currentTime = Number(audio.currentTime || 0);
       const timeDrift = Math.abs(currentTime - targetTime);
@@ -55,59 +72,62 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         lastSyncedUrlRef.current !== nextSrc ||
         timeDrift > 8;
 
-      if (!shouldReload) {
-        setMetadata({
-          title: data.title || "Siaran Sedang Aktif",
-          artist: "Radio Suara Al Muttaqin",
-          art: "/bg-player.png",
-        });
-        return true;
-      }
-
-      audio.src = data.audio_url;
-      audio.load();
-
-      await new Promise<void>((resolve) => {
-        const onLoadedMetadata = () => {
-          audio.removeEventListener("loadedmetadata", onLoadedMetadata);
-          resolve();
-        };
-
-        audio.addEventListener("loadedmetadata", onLoadedMetadata);
-        setTimeout(resolve, 1200);
-      });
-
-      if (targetTime > 0 && (!audio.duration || targetTime < audio.duration)) {
-        audio.currentTime = targetTime;
-      } else {
-        audio.currentTime = 0;
-      }
-
-      if (audioCtx && audioCtx.state === "suspended") {
-        await audioCtx.resume();
-      }
-
-      await audio.play();
-
-      lastSyncedUrlRef.current = nextSrc;
-      setIsPlaying(true);
-      setHasError(false);
       setMetadata({
         title: data.title || "Siaran Sedang Aktif",
         artist: "Radio Suara Al Muttaqin",
         art: "/bg-player.png",
       });
 
-      return true;
+      setListeners(1);
+
+      if (!shouldReload) {
+        return true;
+      }
+
+      try {
+        isAutoSwitchingRef.current = true;
+
+        audio.src = data.audio_url;
+        audio.load();
+
+        await new Promise<void>((resolve) => {
+          const onLoadedMetadata = () => {
+            audio.removeEventListener("loadedmetadata", onLoadedMetadata);
+            resolve();
+          };
+
+          audio.addEventListener("loadedmetadata", onLoadedMetadata);
+          setTimeout(resolve, 1200);
+        });
+
+        if (targetTime > 0 && (!audio.duration || targetTime < audio.duration)) {
+          audio.currentTime = targetTime;
+        } else {
+          audio.currentTime = 0;
+        }
+
+        if (audioCtx && audioCtx.state === "suspended") {
+          await audioCtx.resume();
+        }
+
+        await audio.play();
+
+        lastSyncedUrlRef.current = nextSrc;
+        userStoppedRef.current = false;
+        setIsPlaying(true);
+        setHasError(false);
+
+        return true;
+      } catch (err) {
+        console.error("Gagal menerapkan audio radio:", err);
+        setHasError(true);
+        return false;
+      } finally {
+        isAutoSwitchingRef.current = false;
+      }
     },
     []
   );
-
-  const fetchCurrentRadio = useCallback(async () => {
-    const res = await fetch("/api/get-current-radio", { cache: "no-store" });
-    if (!res.ok) throw new Error("Radio API offline");
-    return res.json();
-  }, []);
 
   const fetchMetadata = useCallback(async () => {
     try {
@@ -140,6 +160,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     fetchMetadata();
+
     const interval = setInterval(fetchMetadata, 15000);
 
     return () => clearInterval(interval);
@@ -196,13 +217,19 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (isPlaying) {
+      userStoppedRef.current = true;
+      isAutoSwitchingRef.current = false;
+
       audioRef.current.pause();
       audioRef.current.src = "";
       audioRef.current.load();
+
       lastSyncedUrlRef.current = "";
       setIsPlaying(false);
     } else {
+      userStoppedRef.current = false;
       setHasError(false);
+
       await startPlayback();
     }
   };
@@ -211,6 +238,8 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     if (!isPlaying) return;
 
     const syncInterval = setInterval(async () => {
+      if (userStoppedRef.current) return;
+
       try {
         const data = await fetchCurrentRadio();
         await applyRadioDataToAudio(data, false);
@@ -223,11 +252,12 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   }, [applyRadioDataToAudio, fetchCurrentRadio, isPlaying]);
 
   const handleAudioEnded = async () => {
-    console.log("File MP3 selesai diputar. Melompat ke track virtual berikutnya...");
+    if (userStoppedRef.current) return;
 
-    if (isPlaying) {
-      await startPlayback();
-    }
+    console.log("Audio selesai. Sync ke audio berikutnya...");
+
+    setIsPlaying(true);
+    await startPlayback();
   };
 
   useEffect(() => {
@@ -257,13 +287,20 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         ref={audioRef}
         crossOrigin="anonymous"
         preload="none"
-        onPause={() => setIsPlaying(false)}
+        onPause={() => {
+          if (!isAutoSwitchingRef.current && userStoppedRef.current) {
+            setIsPlaying(false);
+          }
+        }}
         onPlay={() => {
+          userStoppedRef.current = false;
           setIsPlaying(true);
           setHasError(false);
         }}
         onEnded={handleAudioEnded}
         onError={() => {
+          if (isAutoSwitchingRef.current) return;
+
           setHasError(true);
           setIsPlaying(false);
           console.warn("Virtual Radio RSM Offline / CORS Issue");

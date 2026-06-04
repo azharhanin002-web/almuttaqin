@@ -3,56 +3,91 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
 // =================================================================
-// 📻 1. KONFIGURASI JINGLE OTOMATIS (Masing-masing 10 Menit Sekali)
+// 1. KONFIGURASI JINGLE OTOMATIS
 // =================================================================
-const JINGLE_URL = "https://sdit.my.id/radio/jingle.MP3"; 
-const JINGLE_DURATION = 15; // 💡 Durasi jingle wajib pas dalam hitungan detik
+const JINGLE_URL = "https://sdit.my.id/radio/jingle.MP3";
+const JINGLE_DURATION = 15;
 
 // =================================================================
-// 📥 2. DAFTAR AUDIO CADANGAN (FILLER PLAYLIST)
+// 2. DAFTAR AUDIO CADANGAN
 // =================================================================
 const FILLER_PLAYLIST = [
   {
     title: "Murottal Jeda - Surah Al-Mulk",
     url: "https://sdit.my.id/radio/SurahAlMulk-Saad-Al-Ghamdi.mp3",
-    duration: 180, // 3 menit
+    duration: 180,
   },
   {
     title: "Nasyid Jeda - Rikhie Asbo",
     url: "https://sdit.my.id/radio/Rikhie-Asbo.mp3",
-    duration: 300, // 5 menit
+    duration: 300,
   },
- 
 ];
 
-// Helper untuk menghitung total durasi seluruh playlist cadangan
-const TOTAL_FILLER_DURATION = FILLER_PLAYLIST.reduce((acc, item) => acc + item.duration, 0);
+const TOTAL_FILLER_DURATION = FILLER_PLAYLIST.reduce(
+  (acc, item) => acc + item.duration,
+  0
+);
 
-/**
- * HELPER FUNCTION: Menghitung lagu cadangan mana yang harus berputar secara serempak
- * berdasarkan total detik kekosongan (gap_seconds)
- */
+function titleFromAudioUrl(audioUrl?: string, fallback = "Radio Suara Al Muttaqin") {
+  if (!audioUrl) return fallback;
+
+  try {
+    const url = new URL(audioUrl);
+    const rawFilename = url.pathname.split("/").pop() || "";
+
+    const withoutExtension = rawFilename.replace(/\.[a-z0-9]+$/i, "");
+
+    const readableTitle = decodeURIComponent(withoutExtension)
+      .replace(/[_-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    return readableTitle || fallback;
+  } catch {
+    const rawFilename = audioUrl.split("/").pop() || "";
+
+    const readableTitle = rawFilename
+      .replace(/\.[a-z0-9]+$/i, "")
+      .replace(/[_-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    return readableTitle || fallback;
+  }
+}
+
 function getVirtualFillerTrack(gapSeconds: number) {
-  // Gunakan rumus modulus (sisa bagi) agar playlist terus berputar berantai (looping) tanpa putus
+  if (TOTAL_FILLER_DURATION <= 0) {
+    return {
+      title: "Radio Suara Al Muttaqin",
+      audio_url: "",
+      elapsed_seconds: 0,
+    };
+  }
+
   const virtualTimeline = gapSeconds % TOTAL_FILLER_DURATION;
-  
   let accumulatedTime = 0;
 
   for (const track of FILLER_PLAYLIST) {
-    if (virtualTimeline >= accumulatedTime && virtualTimeline < accumulatedTime + track.duration) {
+    if (
+      virtualTimeline >= accumulatedTime &&
+      virtualTimeline < accumulatedTime + track.duration
+    ) {
       return {
-        title: track.title,
+        title: track.title || titleFromAudioUrl(track.url),
         audio_url: track.url,
-        elapsed_seconds: virtualTimeline - accumulatedTime
+        elapsed_seconds: virtualTimeline - accumulatedTime,
       };
     }
+
     accumulatedTime += track.duration;
   }
 
   return {
-    title: FILLER_PLAYLIST[0].title,
+    title: FILLER_PLAYLIST[0].title || titleFromAudioUrl(FILLER_PLAYLIST[0].url),
     audio_url: FILLER_PLAYLIST[0].url,
-    elapsed_seconds: 0
+    elapsed_seconds: 0,
   };
 }
 
@@ -63,33 +98,42 @@ export async function GET() {
     const currentSecond = now.getSeconds();
 
     // =================================================================
-    // ⚡ LAPISAN A: LOGIKA PENYELA JINGLE (Memicu Otomatis Tiap Kelipatan 10 Menit)
+    // A. JINGLE TIAP 5 MENIT, TAPI TIDAK DI MENIT 00
     // =================================================================
-    // Contoh: Jam 10:00, 10:10, 10:20, 10:30, 10:40, 10:50 pada 15 detik pertama
-    if (currentMinute % 5 === 0 && currentMinute !== 0 && currentSecond < JINGLE_DURATION) {
+    if (
+      currentMinute % 5 === 0 &&
+      currentMinute !== 0 &&
+      currentSecond < JINGLE_DURATION
+    ) {
       return NextResponse.json({
         active: true,
-        title: "Jingle Suara Al Muttaqin",
+        title: titleFromAudioUrl(JINGLE_URL, "Jingle Suara Al Muttaqin"),
+        program_title: "Jingle Suara Al Muttaqin",
         audio_url: JINGLE_URL,
-        elapsed_seconds: currentSecond // Jika jemaah masuk di tengah jingle, jalurnya tetap lurus sinkron!
+        elapsed_seconds: currentSecond,
+        type: "jingle",
       });
     }
 
-    // Ambil data jadwal siaran utama dari database Supabase
+    // =================================================================
+    // B. AMBIL JADWAL UTAMA DARI DATABASE
+    // =================================================================
     const currentTrack = await prisma.radioStream.findFirst();
 
     // =================================================================
-    // 📻 SITUASI B: JIKA TIDAK ADA JADWAL UTAMA SAMA SEKALI DI DATABASE
+    // C. JIKA TIDAK ADA JADWAL UTAMA, PUTAR FILLER
     // =================================================================
     if (!currentTrack) {
       const nowTimestampSeconds = Math.floor(Date.now() / 1000);
       const currentFiller = getVirtualFillerTrack(nowTimestampSeconds);
-      
+
       return NextResponse.json({
         active: true,
         title: currentFiller.title,
+        program_title: "Audio Cadangan",
         audio_url: currentFiller.audio_url,
-        elapsed_seconds: currentFiller.elapsed_seconds
+        elapsed_seconds: currentFiller.elapsed_seconds,
+        type: "filler",
       });
     }
 
@@ -98,7 +142,7 @@ export async function GET() {
     const elapsedSeconds = (nowTimestamp - startTime) / 1000;
 
     // =================================================================
-    // 🚀 SITUASI C: LOGIKA PENYELAMAT KEKOSONGAN (Materi Kajian Utama Habis Duluan)
+    // D. JIKA AUDIO UTAMA SUDAH HABIS, LANJUT FILLER
     // =================================================================
     if (elapsedSeconds >= currentTrack.duration) {
       const gapSeconds = elapsedSeconds - currentTrack.duration;
@@ -107,29 +151,34 @@ export async function GET() {
       return NextResponse.json({
         active: true,
         title: currentFiller.title,
+        program_title: "Audio Cadangan",
         audio_url: currentFiller.audio_url,
-        elapsed_seconds: currentFiller.elapsed_seconds
+        elapsed_seconds: currentFiller.elapsed_seconds,
+        type: "filler",
       });
     }
 
     // =================================================================
-    // 🟢 SITUASI D: KONDISI NORMAL (Audio utama siaran Cron Job sedang mengudara)
+    // E. KONDISI NORMAL: TAMPILKAN NAMA FILE AUDIO YANG SEDANG DIPUTAR
     // =================================================================
     return NextResponse.json({
       active: true,
-      title: currentTrack.title,
+      title: titleFromAudioUrl(currentTrack.audio_url, currentTrack.title),
+      program_title: currentTrack.title,
       audio_url: currentTrack.audio_url,
-      elapsed_seconds: elapsedSeconds
+      elapsed_seconds: elapsedSeconds,
+      type: "main",
     });
-
   } catch (error: any) {
-    console.error("⚠️ Gagal memuat get-current-radio (Database Stun/Timeout):", error);
-    // Jalur penyelamat instan jika database mengalami kendala koneksi agar radio tidak hening
+    console.error("Gagal memuat get-current-radio:", error);
+
     return NextResponse.json({
       active: true,
       title: FILLER_PLAYLIST[0].title,
+      program_title: "Audio Cadangan",
       audio_url: FILLER_PLAYLIST[0].url,
-      elapsed_seconds: 0
+      elapsed_seconds: 0,
+      type: "fallback",
     });
   }
 }
