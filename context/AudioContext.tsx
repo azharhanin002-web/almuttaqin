@@ -26,7 +26,7 @@ const AudioContext = createContext<AudioContextType | null>(null);
 
 export function AudioProvider({ children }: { children: React.ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const audioContextRef = useRef<any>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
 
@@ -47,17 +47,18 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const [isYouTubeLive, setIsYouTubeLive] = useState(false);
   const [isYouTubePlaying, setIsYouTubePlaying] = useState(false);
 
+  // Fetch radio MP3
   const fetchCurrentRadio = useCallback(async () => {
     const res = await fetch("/api/get-current-radio", { cache: "no-store" });
     if (!res.ok) throw new Error("Radio API offline");
     return res.json();
   }, []);
 
+  // Load & play MP3 radio
   const applyRadioDataToAudio = useCallback(
     async (data: any, forceReload = false) => {
       if (!audioRef.current || !data?.active || !data.audio_url) return false;
 
-      // Stop MP3 jika YouTube Live sedang dimainkan
       if (isYouTubeLive && isYouTubePlaying) {
         audioRef.current.pause();
         audioRef.current.src = "";
@@ -128,6 +129,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     [isYouTubeLive, isYouTubePlaying]
   );
 
+  // Fetch metadata
   const fetchMetadata = useCallback(async () => {
     try {
       const data = await fetchCurrentRadio();
@@ -162,6 +164,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(interval);
   }, [fetchMetadata]);
 
+  // Audio Engine
   const initAudio = useCallback(() => {
     if (isInitialized.current || !audioRef.current) return;
     try {
@@ -218,33 +221,26 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Sync interval
   useEffect(() => {
     if (!isPlaying || isYouTubeLive) return;
-    const syncInterval = setInterval(async () => {
+    const interval = setInterval(async () => {
       if (userStoppedRef.current) return;
       try {
         const data = await fetchCurrentRadio();
         await applyRadioDataToAudio(data, false);
       } catch (err) {
-        console.error("Gagal sync radio:", err);
+        console.error(err);
       }
     }, 5000);
-    return () => clearInterval(syncInterval);
-  }, [applyRadioDataToAudio, fetchCurrentRadio, isPlaying, isYouTubeLive]);
+    return () => clearInterval(interval);
+  }, [isPlaying, isYouTubeLive, applyRadioDataToAudio, fetchCurrentRadio]);
 
   const handleAudioEnded = async () => {
     if (userStoppedRef.current || (isYouTubeLive && isYouTubePlaying)) return;
     setIsPlaying(true);
     await startPlayback();
   };
-
-  useEffect(() => {
-    return () => {
-      if (audioContextRef.current) {
-        try { audioContextRef.current.close(); } catch (e) { console.error(e); }
-      }
-    };
-  }, []);
 
   return (
     <AudioContext.Provider
