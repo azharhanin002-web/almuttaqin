@@ -33,9 +33,6 @@ export default function LiveSection() {
   const iframeContainerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // ==========================
-  // Load YouTube IFrame API
-  // ==========================
   useEffect(() => {
     if (!window.YT) {
       const tag = document.createElement("script");
@@ -44,13 +41,10 @@ export default function LiveSection() {
     }
   }, []);
 
-  // ==========================
-  // Check YouTube Live Status
-  // ==========================
   async function checkYouTubeLiveStatus() {
     try {
       const res = await fetch(
-        `https://https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${YOUTUBE_CHANNEL_ID}&type=video&eventType=live&key=${API_KEY}`
+        `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${YOUTUBE_CHANNEL_ID}&type=video&eventType=live&key=${API_KEY}`
       );
       const data = await res.json();
       if (data.items && data.items.length > 0) {
@@ -63,18 +57,14 @@ export default function LiveSection() {
         setYoutubeVideoId(null);
         setLiveTitle(null);
         setIsYouTubeLive?.(false);
-        if (isYouTubePlaying) {
-          setIsYouTubePlaying?.(false);
-        }
+        if (isYouTubePlaying) setIsYouTubePlaying?.(false);
       }
     } catch (err) {
       console.error("YouTube API error", err);
       setYoutubeVideoId(null);
       setLiveTitle(null);
       setIsYouTubeLive?.(false);
-      if (isYouTubePlaying) {
-        setIsYouTubePlaying?.(false);
-      }
+      if (isYouTubePlaying) setIsYouTubePlaying?.(false);
     }
   }
 
@@ -84,11 +74,8 @@ export default function LiveSection() {
     return () => clearInterval(interval);
   }, []);
 
-  // ==========================
-  // Play/Stop Action Handler
-  // ==========================
-  const handlePlayClick = () => {
-    // KONDISI 1: Jika YouTube sedang menyala -> STOP YOUTUBE
+  // 🔥 PERBAIKAN UTAMA: handler asinkronous untuk menghentikan total engine MP3 sebelum YouTube memutar suara
+  const handlePlayClick = async () => {
     if (isYouTubePlaying) {
       if (playerRef.current && typeof playerRef.current.pauseVideo === "function") {
         playerRef.current.pauseVideo();
@@ -97,18 +84,10 @@ export default function LiveSection() {
       return;
     }
 
-    // KONDISI 2: Jika MP3 Audio sedang menyala -> STOP MP3
-    if (isPlaying) {
-      togglePlay(); // Memanggil killMp3Playback di Context
-      return;
-    }
-
-    // KONDISI 3: Semua mati, dan ada Live YouTube -> UTAMAKAN YOUTUBE LIVE
     if (youtubeVideoId && window.YT && iframeContainerRef.current) {
-      
-      // 🔥 PENGHANCUR INSTAN: Matikan MP3 secara inline di sini agar tidak balapan dengan interval sync
+      // Jika MP3 sedang hidup, paksa matikan & tunggu sampai context selesai menidurkan AudioContext
       if (isPlaying) {
-        togglePlay();
+        await togglePlay(); 
       }
 
       if (!playerRef.current) {
@@ -124,15 +103,12 @@ export default function LiveSection() {
           },
           events: {
             onReady: (event: any) => {
-              // 🔥 TRICK AUTOPLAY BROWSER: Paksa unMute dan naikkan volume setelah interaksi klik user
               if (typeof event.target.unMute === "function") event.target.unMute();
               if (typeof event.target.setVolume === "function") event.target.setVolume(100);
-              
               event.target.playVideo();
               setIsYouTubePlaying?.(true);
             },
             onStateChange: (event: any) => {
-              // Menyinkronkan status player (1 = playing, 2 = paused, 0 = ended)
               if (event.data === 1) {
                 setIsYouTubePlaying?.(true);
               } else if (event.data === 2 || event.data === 0) {
@@ -140,7 +116,7 @@ export default function LiveSection() {
               }
             },
             onError: (err: any) => {
-              console.error("YouTube Player Error Code:", err.data);
+              console.error("YouTube Player Error:", err.data);
               setIsYouTubePlaying?.(false);
             }
           },
@@ -148,7 +124,6 @@ export default function LiveSection() {
       } else {
         if (typeof playerRef.current.unMute === "function") playerRef.current.unMute();
         if (typeof playerRef.current.setVolume === "function") playerRef.current.setVolume(100);
-        
         playerRef.current.loadVideoById(youtubeVideoId);
         playerRef.current.playVideo();
         setIsYouTubePlaying?.(true);
@@ -156,11 +131,9 @@ export default function LiveSection() {
       return;
     }
 
-    // KONDISI 4: Tidak ada YouTube Live -> JALANKAN MP3 RADIO BIASA
     togglePlay();
   };
 
-  // Ensure iframe cleaner on unmount
   useEffect(() => {
     return () => {
       if (playerRef.current && typeof playerRef.current.destroy === "function") {
@@ -169,9 +142,7 @@ export default function LiveSection() {
     };
   }, []);
 
-  // ==========================
-  // Visualizer
-  // ==========================
+  // Visualizer Loop
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -252,7 +223,6 @@ export default function LiveSection() {
     };
   }, [isPlaying, isYouTubePlaying, analyserRef]);
 
-  // Dynamic Metadata Info
   const displayTitle = isYouTubePlaying && liveTitle ? liveTitle : metadata?.title;
   const displayArtist = isYouTubePlaying ? "LIVE STREAMING YOUTUBE" : metadata?.artist;
 
@@ -260,32 +230,24 @@ export default function LiveSection() {
     <section className="relative overflow-hidden bg-black py-12 sm:py-16 lg:py-20 px-4 sm:px-6">
       <div className="absolute inset-0 bg-gradient-to-b from-black via-emerald-950/80 to-black" />
       <div className="relative z-20 mx-auto max-w-6xl">
-
-        {/* TITLE */}
         <div className="text-center mb-6 sm:mb-8 lg:mb-10">
           <h2 className="text-sm sm:text-lg md:text-xl lg:text-2xl font-black text-emerald-400 uppercase tracking-[0.2em] sm:tracking-[0.35em]">
             {isYouTubePlaying ? "🔴 LIVE STREAMING" : "⚡ ON AIR NOW ⚡"}
           </h2>
         </div>
 
-        {/* CARD */}
         <div className="rounded-2xl lg:rounded-3xl border border-emerald-500/20 bg-white/5 backdrop-blur-xl p-4 sm:p-6 lg:p-8 shadow-2xl">
           <div className="flex flex-col md:flex-row items-center gap-5 sm:gap-6 lg:gap-8">
-
-            {/* COVER / THUMBNAIL */}
             <div className="relative w-32 h-32 sm:w-40 sm:h-40 lg:w-44 lg:h-44 shrink-0">
               <div className="absolute inset-0 rounded-2xl bg-emerald-500/20 blur-3xl animate-pulse" />
               <img
-                src={youtubeVideoId
-                  ? `https://img.youtube.com/vi/${youtubeVideoId}/hqdefault.jpg`
-                  : metadata?.art || "/bg-player.png"}
+                src={youtubeVideoId ? `https://img.youtube.com/vi/${youtubeVideoId}/hqdefault.jpg` : metadata?.art || "/bg-player.png"}
                 alt={displayTitle || "Radio"}
                 onError={(e) => { (e.target as HTMLImageElement).src = "/bg-player.png"; }}
                 className="relative z-10 w-full h-full object-cover rounded-2xl border border-white/20"
               />
             </div>
 
-            {/* CONTENT */}
             <div className="flex-1 w-full">
               <div className="h-20 sm:h-24 lg:h-28 bg-black rounded-xl overflow-hidden border border-emerald-500/20">
                 <canvas ref={canvasRef} className="w-full h-full" />
@@ -301,7 +263,6 @@ export default function LiveSection() {
             </div>
           </div>
 
-          {/* FOOTER */}
           <div className="mt-6 flex flex-col sm:flex-row gap-4 sm:gap-3 sm:items-center sm:justify-between">
             <div className="text-center sm:text-left text-emerald-400 text-sm font-bold">
               👥 {listeners} Pendengar
@@ -320,7 +281,7 @@ export default function LiveSection() {
           </div>
         </div>
 
-        {/* 🔥 FIX CONTAINER: Diposisikan di luar layar jauh agar lolos dari deteksi elemen mati (hidden element) oleh browser */}
+        {/* Container YouTube dipindah jauh agar lolos dari deteksi elemen mati oleh browser */}
         <div 
           ref={iframeContainerRef} 
           style={{ 
