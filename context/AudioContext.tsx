@@ -14,7 +14,7 @@ interface AudioContextType {
   hasError: boolean;
   metadata: { title: string; artist: string; art: string };
   listeners: number;
-  togglePlay: () => void;
+  togglePlay: (play?: boolean) => void;
   analyserRef: React.MutableRefObject<AnalyserNode | null>;
   isYouTubeLive: boolean;
   setIsYouTubeLive: React.Dispatch<React.SetStateAction<boolean>>;
@@ -33,7 +33,6 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const isInitialized = useRef(false);
   const lastSyncedUrlRef = useRef("");
   const userStoppedRef = useRef(false);
-  const isAutoSwitchingRef = useRef(false);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -47,157 +46,6 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const [isYouTubeLive, setIsYouTubeLive] = useState(false);
   const [isYouTubePlaying, setIsYouTubePlaying] = useState(false);
 
-  const isYouTubePlayingRef = useRef(false);
-
-  useEffect(() => {
-    isYouTubePlayingRef.current = isYouTubePlaying;
-  }, [isYouTubePlaying]);
-
-  // Fetch radio MP3
-  const fetchCurrentRadio = useCallback(async () => {
-    const res = await fetch("/api/get-current-radio", { cache: "no-store" });
-    if (!res.ok) throw new Error("Radio API offline");
-    return res.json();
-  }, []);
-
-  // 🔥 PERBAIKAN: Mematikan Audio MP3 & Menidurkan AudioContext agar Hardware Audio Lepas
-  const killMp3Playback = useCallback(async () => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.src = "";
-      audioRef.current.load();
-    }
-    
-    // Paksa AudioContext tidur agar hardware audio terbebaskan untuk YouTube
-    if (audioContextRef.current && audioContextRef.current.state !== "suspended") {
-      try {
-        await audioContextRef.current.suspend();
-        console.log("Web Audio Context ditidurkan (Hardware Bebas).");
-      } catch (e) {
-        console.error("Gagal menidurkan AudioContext", e);
-      }
-    }
-
-    lastSyncedUrlRef.current = "";
-    setIsPlaying(false);
-  }, []);
-
-  // Load & play MP3 radio
-  const applyRadioDataToAudio = useCallback(
-    async (data: any, forceReload = false) => {
-      if (!audioRef.current || !data?.active || !data.audio_url) return false;
-
-      if (isYouTubePlayingRef.current) {
-        await killMp3Playback();
-        return false;
-      }
-
-      const audio = audioRef.current;
-      const nextSrc = new URL(data.audio_url, window.location.href).href;
-      const currentSrc = audio.src;
-      const targetTime = Number(data.elapsed_seconds || 0);
-      const currentTime = Number(audio.currentTime || 0);
-      const timeDrift = Math.abs(currentTime - targetTime);
-
-      const shouldReload =
-        forceReload ||
-        currentSrc !== nextSrc ||
-        lastSyncedUrlRef.current !== nextSrc ||
-        timeDrift > 8;
-
-      if (!isYouTubePlayingRef.current) {
-        setMetadata({
-          title: data.title || "Siaran Sedang Aktif",
-          artist: "Radio Suara Al Muttaqin",
-          art: "/bg-player.png",
-        });
-        setListeners(1);
-      }
-
-      if (!shouldReload) return true;
-
-      try {
-        isAutoSwitchingRef.current = true;
-        audio.src = data.audio_url;
-        audio.load();
-
-        await new Promise<void>((resolve) => {
-          const onLoadedMetadata = () => {
-            audio.removeEventListener("loadedmetadata", onLoadedMetadata);
-            resolve();
-          };
-          audio.addEventListener("loadedmetadata", onLoadedMetadata);
-          setTimeout(resolve, 1200);
-        });
-
-        if (targetTime > 0 && (!audio.duration || targetTime < audio.duration)) {
-          audio.currentTime = targetTime;
-        } else {
-          audio.currentTime = 0;
-        }
-
-        // Bangunkan AudioContext kembali jika MP3 ingin bersuara
-        if (audioContextRef.current && audioContextRef.current.state === "suspended") {
-          await audioContextRef.current.resume();
-        }
-        
-        await audio.play();
-
-        lastSyncedUrlRef.current = nextSrc;
-        userStoppedRef.current = false;
-        setIsPlaying(true);
-        setHasError(false);
-        return true;
-      } catch (err) {
-        console.error("Gagal menerapkan audio radio:", err);
-        setHasError(true);
-        setIsPlaying(false);
-        return false;
-      } finally {
-        isAutoSwitchingRef.current = false;
-      }
-    },
-    [killMp3Playback]
-  );
-
-  // Fetch metadata berkala
-  const fetchMetadata = useCallback(async () => {
-    if (isYouTubePlayingRef.current) return;
-
-    try {
-      const data = await fetchCurrentRadio();
-      if (data && data.active) {
-        setMetadata({
-          title: data.title || "Siaran Sedang Aktif",
-          artist: "Radio Suara Al Muttaqin",
-          art: "/bg-player.png",
-        });
-        setListeners(1);
-      } else {
-        setMetadata({
-          title: "Siaran Sedang Offline",
-          artist: "Radio Suara Al Muttaqin",
-          art: "/bg-player.png",
-        });
-        setListeners(0);
-      }
-    } catch {
-      setMetadata({
-        title: "Siaran Sedang Offline",
-        artist: "Radio Suara Al Muttaqin",
-        art: "/bg-player.png",
-      });
-      setListeners(0);
-    }
-  }, [fetchCurrentRadio]);
-
-  useEffect(() => {
-    fetchMetadata();
-    const interval = setInterval(fetchMetadata, 15000);
-    return () => clearInterval(interval);
-  }, [fetchMetadata]);
-
-  // Audio Engine Inisialisasi Web Audio API
   const initAudio = useCallback(() => {
     if (isInitialized.current || !audioRef.current) return;
     try {
@@ -216,14 +64,78 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       sourceRef.current = source;
 
       isInitialized.current = true;
-      console.log("Audio Engine Virtual Radio RSM Aktif Terpusat");
+      console.log("Audio Engine Virtual Radio Aktif");
     } catch (err) {
       console.error("Gagal inisialisasi Audio Engine:", err);
     }
   }, []);
 
+  const fetchCurrentRadio = useCallback(async () => {
+    const res = await fetch("/api/get-current-radio", { cache: "no-store" });
+    if (!res.ok) throw new Error("Radio API offline");
+    return res.json();
+  }, []);
+
+  const applyRadioDataToAudio = useCallback(
+    async (data: any, forceReload = false) => {
+      if (!audioRef.current || !data?.active || !data.audio_url) return false;
+
+      // Stop MP3 jika YouTube Live sedang dimainkan
+      if (isYouTubeLive && isYouTubePlaying) {
+        audioRef.current.pause();
+        audioRef.current.src = "";
+        audioRef.current.load();
+        setIsPlaying(false);
+        return false;
+      }
+
+      const audio = audioRef.current;
+      const audioCtx = audioContextRef.current;
+      const nextSrc = new URL(data.audio_url, window.location.href).href;
+      const currentSrc = audio.src;
+
+      const shouldReload = forceReload || currentSrc !== nextSrc || lastSyncedUrlRef.current !== nextSrc;
+
+      setMetadata({
+        title: data.title || "Siaran Sedang Aktif",
+        artist: "Radio Suara Al Muttaqin",
+        art: "/bg-player.png",
+      });
+      setListeners(1);
+
+      if (!shouldReload) return true;
+
+      try {
+        audio.src = data.audio_url;
+        audio.load();
+
+        await new Promise<void>((resolve) => {
+          const onLoaded = () => {
+            audio.removeEventListener("loadedmetadata", onLoaded);
+            resolve();
+          };
+          audio.addEventListener("loadedmetadata", onLoaded);
+          setTimeout(resolve, 1200);
+        });
+
+        if (audioCtx && audioCtx.state === "suspended") await audioCtx.resume();
+        await audio.play();
+
+        lastSyncedUrlRef.current = nextSrc;
+        setIsPlaying(true);
+        setHasError(false);
+        return true;
+      } catch (err) {
+        console.error("Gagal memutar MP3:", err);
+        setHasError(true);
+        return false;
+      }
+    },
+    [isYouTubeLive, isYouTubePlaying]
+  );
+
   const startPlayback = useCallback(async () => {
-    if (isYouTubePlayingRef.current) return;
+    if (isYouTubeLive && isYouTubePlaying) return;
     try {
       const data = await fetchCurrentRadio();
       if (data && data.active) await applyRadioDataToAudio(data, true);
@@ -233,57 +145,31 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       setHasError(true);
       setIsPlaying(false);
     }
-  }, [applyRadioDataToAudio, fetchCurrentRadio]);
+  }, [applyRadioDataToAudio, fetchCurrentRadio, isYouTubeLive, isYouTubePlaying]);
 
-  const togglePlay = async () => {
+  const togglePlay = async (play?: boolean) => {
     if (!audioRef.current) return;
     if (!isInitialized.current) initAudio();
 
-    if (isPlaying) {
+    if (play === false || (isPlaying && play === undefined)) {
+      audioRef.current.pause();
+      audioRef.current.src = "";
+      audioRef.current.load();
+      setIsPlaying(false);
       userStoppedRef.current = true;
-      isAutoSwitchingRef.current = false;
-      await killMp3Playback();
     } else {
       userStoppedRef.current = false;
-      setHasError(false);
       await startPlayback();
     }
   };
 
-  // Interceptor Otomatis jika youtube mendadak aktif
   useEffect(() => {
-    if (isYouTubePlaying && isPlaying) {
-      killMp3Playback();
-    }
-  }, [isYouTubePlaying, isPlaying, killMp3Playback]);
-
-  // Sync interval berkala
-  useEffect(() => {
-    if (!isPlaying) return;
-
-    const interval = setInterval(async () => {
-      if (userStoppedRef.current || isYouTubePlayingRef.current) {
-        clearInterval(interval);
-        return;
+    return () => {
+      if (audioContextRef.current) {
+        try { audioContextRef.current.close(); } catch {}
       }
-      try {
-        const data = await fetchCurrentRadio();
-        if (!isYouTubePlayingRef.current) {
-          await applyRadioDataToAudio(data, false);
-        }
-      } catch (err) {
-        console.error("Sync interval error:", err);
-      }
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [isPlaying, applyRadioDataToAudio, fetchCurrentRadio]);
-
-  const handleAudioEnded = async () => {
-    if (userStoppedRef.current || isYouTubePlayingRef.current) return;
-    setIsPlaying(true);
-    await startPlayback();
-  };
+    };
+  }, []);
 
   return (
     <AudioContext.Provider
@@ -300,27 +186,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         setIsYouTubePlaying,
       }}
     >
-      <audio
-        ref={audioRef}
-        crossOrigin="anonymous"
-        preload="none"
-        onPause={() => {
-          if (!isAutoSwitchingRef.current && userStoppedRef.current) setIsPlaying(false);
-        }}
-        onPlay={() => {
-          userStoppedRef.current = false;
-          setIsPlaying(true);
-          setHasError(false);
-        }}
-        onEnded={handleAudioEnded}
-        onError={() => {
-          if (isAutoSwitchingRef.current) return;
-          setHasError(true);
-          setIsPlaying(false);
-          console.warn("Virtual Radio RSM Offline / CORS Issue");
-        }}
-        className="hidden"
-      />
+      <audio ref={audioRef} crossOrigin="anonymous" preload="none" className="hidden" />
       {children}
     </AudioContext.Provider>
   );
