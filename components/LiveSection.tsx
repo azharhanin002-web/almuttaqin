@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAudio } from "@/context/AudioContext";
 
 export const dynamic = "force-dynamic";
+
+const YOUTUBE_CHANNEL_ID = process.env.NEXT_PUBLIC_YOUTUBE_CHANNEL_ID!;
+const API_KEY = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY!;
 
 export default function LiveSection() {
   const {
@@ -18,8 +21,58 @@ export default function LiveSection() {
     listeners = 0,
   } = useAudio() || {};
 
+  const [isYouTubeLive, setIsYouTubeLive] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  // ==========================
+  // YouTube Live Detection
+  // ==========================
+  async function checkYouTubeLiveStatus() {
+    try {
+      const res = await fetch(
+        `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${YOUTUBE_CHANNEL_ID}&type=video&eventType=live&key=${YOUTUBE_API_KEY}`
+      );
+      const data = await res.json();
+      const live = data.items && data.items.length > 0;
+      setIsYouTubeLive(live);
+    } catch (err) {
+      console.error("YouTube API error", err);
+      setIsYouTubeLive(false);
+    }
+  }
+
+  useEffect(() => {
+    // cek saat mount
+    checkYouTubeLiveStatus();
+    // interval setiap 30 detik
+    const interval = setInterval(checkYouTubeLiveStatus, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // ==========================
+  // Persistent playback
+  // ==========================
+  useEffect(() => {
+    const saved = JSON.parse(localStorage.getItem("isPlaying") || "false");
+    if (saved && !isPlaying) togglePlay();
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("isPlaying", JSON.stringify(isPlaying));
+  }, [isPlaying]);
+
+  // ==========================
+  // Override MP3 saat live
+  // ==========================
+  useEffect(() => {
+    if (isYouTubeLive && isPlaying) {
+      togglePlay(); // pause MP3 agar digantikan live
+    }
+  }, [isYouTubeLive]);
+
+  // ==========================
+  // Visualizer
+  // ==========================
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -33,7 +86,6 @@ export default function LiveSection() {
     };
 
     resize();
-
     window.addEventListener("resize", resize);
 
     let animationId: number;
@@ -41,21 +93,13 @@ export default function LiveSection() {
 
     const draw = () => {
       animationId = requestAnimationFrame(draw);
-
       if (!canvas.width || !canvas.height) return;
-
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-
       if (!isPlaying || !analyserRef?.current) return;
 
       const analyser = analyserRef.current;
-
-      const bufferLength =
-        analyser.frequencyBinCount;
-
-      const dataArray =
-        new Uint8Array(bufferLength);
-
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
       analyser.getByteFrequencyData(dataArray);
 
       const width = canvas.width;
@@ -63,17 +107,10 @@ export default function LiveSection() {
       const centerY = height / 2;
 
       let bass = 0;
-
-      for (let i = 0; i < 10; i++) {
-        bass += dataArray[i] || 0;
-      }
-
+      for (let i = 0; i < 10; i++) bass += dataArray[i] || 0;
       bass /= 10;
 
-      if (bass > 180) {
-        flashAlpha = 0.5;
-      }
-
+      if (bass > 180) flashAlpha = 0.5;
       if (flashAlpha > 0) {
         ctx.fillStyle = `rgba(0,255,200,${flashAlpha})`;
         ctx.fillRect(0, 0, width, height);
@@ -87,52 +124,21 @@ export default function LiveSection() {
       ctx.shadowColor = "#00ffcc";
 
       for (let i = 0; i < barCount; i++) {
-        const dataIndex = Math.floor(
-          i * (bufferLength / barCount)
-        );
-
-        const value =
-          (dataArray[dataIndex] || 0) / 255;
-
-        const barHeight =
-          value * centerY * 1.4;
-
+        const dataIndex = Math.floor(i * (bufferLength / barCount));
+        const value = (dataArray[dataIndex] || 0) / 255;
+        const barHeight = value * centerY * 1.4;
         const x = i * spacing;
-
         const yTop = centerY - barHeight;
         const yBottom = centerY + barHeight;
 
-        const gradient =
-          ctx.createLinearGradient(
-            0,
-            yTop,
-            0,
-            yBottom
-          );
-
-        gradient.addColorStop(
-          0,
-          "#00ffcc"
-        );
-
-        gradient.addColorStop(
-          0.3,
-          "#10b981"
-        );
-
-        gradient.addColorStop(
-          0.6,
-          "#065f46"
-        );
-
-        gradient.addColorStop(
-          1,
-          "#001f1f"
-        );
+        const gradient = ctx.createLinearGradient(0, yTop, 0, yBottom);
+        gradient.addColorStop(0, "#00ffcc");
+        gradient.addColorStop(0.3, "#10b981");
+        gradient.addColorStop(0.6, "#065f46");
+        gradient.addColorStop(1, "#001f1f");
 
         ctx.strokeStyle = gradient;
         ctx.lineWidth = 2;
-
         ctx.beginPath();
         ctx.moveTo(x, yTop);
         ctx.lineTo(x, yBottom);
@@ -141,20 +147,18 @@ export default function LiveSection() {
     };
 
     draw();
-
     return () => {
       cancelAnimationFrame(animationId);
-      window.removeEventListener(
-        "resize",
-        resize
-      );
+      window.removeEventListener("resize", resize);
     };
   }, [isPlaying, analyserRef]);
 
+  // ==========================
+  // JSX (tidak diubah desain)
+  // ==========================
   return (
     <section className="relative overflow-hidden bg-black py-12 sm:py-16 lg:py-20 px-4 sm:px-6">
       <div className="absolute inset-0 bg-gradient-to-b from-black via-emerald-950/80 to-black" />
-
       <div className="relative z-20 mx-auto max-w-6xl">
 
         {/* TITLE */}
@@ -166,64 +170,43 @@ export default function LiveSection() {
 
         {/* CARD */}
         <div className="rounded-2xl lg:rounded-3xl border border-emerald-500/20 bg-white/5 backdrop-blur-xl p-4 sm:p-6 lg:p-8 shadow-2xl">
-
           <div className="flex flex-col md:flex-row items-center gap-5 sm:gap-6 lg:gap-8">
 
             {/* COVER */}
             <div className="relative w-32 h-32 sm:w-40 sm:h-40 lg:w-44 lg:h-44 shrink-0">
-
               <div className="absolute inset-0 rounded-2xl bg-emerald-500/20 blur-3xl animate-pulse" />
-
               <img
-                src={
-                  metadata?.art ||
-                  "/bg-player.png"
-                }
+                src={metadata?.art || "/bg-player.png"}
                 alt={metadata?.title}
-                onError={(e) => {
-                  (
-                    e.target as HTMLImageElement
-                  ).src = "/bg-player.png";
-                }}
+                onError={(e) => { (e.target as HTMLImageElement).src = "/bg-player.png"; }}
                 className="relative z-10 w-full h-full object-cover rounded-2xl border border-white/20"
               />
             </div>
 
             {/* CONTENT */}
             <div className="flex-1 w-full">
-
               {/* VISUALIZER */}
               <div className="h-20 sm:h-24 lg:h-28 bg-black rounded-xl overflow-hidden border border-emerald-500/20">
-                <canvas
-                  ref={canvasRef}
-                  className="w-full h-full"
-                />
+                <canvas ref={canvasRef} className="w-full h-full" />
               </div>
 
               {/* INFO */}
               <div className="mt-4 text-center md:text-left">
-
                 <h3 className="text-lg sm:text-xl lg:text-2xl font-black text-white leading-tight">
-                  {metadata?.title ||
-                    "Radio Suara Al Muttaqin"}
+                  {metadata?.title || "Radio Suara Al Muttaqin"}
                 </h3>
-
                 <p className="mt-2 text-xs sm:text-sm text-emerald-400 uppercase tracking-wider">
-                  {metadata?.artist ||
-                    "Virtual Live Stream"}
+                  {metadata?.artist || "Virtual Live Stream"}
                 </p>
               </div>
-
             </div>
           </div>
 
           {/* FOOTER */}
           <div className="mt-6 flex flex-col sm:flex-row gap-4 sm:gap-3 sm:items-center sm:justify-between">
-
             <div className="text-center sm:text-left text-emerald-400 text-sm font-bold">
               👥 {listeners} Pendengar
             </div>
-
             <button
               type="button"
               onClick={togglePlay}
@@ -233,13 +216,9 @@ export default function LiveSection() {
                   : "bg-emerald-600 hover:bg-emerald-500 text-white"
               }`}
             >
-              {isPlaying
-                ? "Stop Radio"
-                : "Putar Radio"}
+              {isPlaying ? "Stop Radio" : "Putar Radio"}
             </button>
-
           </div>
-
         </div>
       </div>
     </section>

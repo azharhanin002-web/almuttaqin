@@ -1,4 +1,3 @@
-// app/api/get-current-radio/route.ts
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
@@ -31,64 +30,28 @@ const TOTAL_FILLER_DURATION = FILLER_PLAYLIST.reduce(
 
 function titleFromAudioUrl(audioUrl?: string, fallback = "Radio Suara Al Muttaqin") {
   if (!audioUrl) return fallback;
-
   try {
     const url = new URL(audioUrl);
     const rawFilename = url.pathname.split("/").pop() || "";
-
     const withoutExtension = rawFilename.replace(/\.[a-z0-9]+$/i, "");
-
-    const readableTitle = decodeURIComponent(withoutExtension)
-      .replace(/[_-]+/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    return readableTitle || fallback;
+    return decodeURIComponent(withoutExtension).replace(/[_-]+/g, " ").trim() || fallback;
   } catch {
     const rawFilename = audioUrl.split("/").pop() || "";
-
-    const readableTitle = rawFilename
-      .replace(/\.[a-z0-9]+$/i, "")
-      .replace(/[_-]+/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    return readableTitle || fallback;
+    return rawFilename.replace(/\.[a-z0-9]+$/i, "").replace(/[_-]+/g, " ").trim() || fallback;
   }
 }
 
 function getVirtualFillerTrack(gapSeconds: number) {
-  if (TOTAL_FILLER_DURATION <= 0) {
-    return {
-      title: "Radio Suara Al Muttaqin",
-      audio_url: "",
-      elapsed_seconds: 0,
-    };
-  }
-
+  if (TOTAL_FILLER_DURATION <= 0) return { title: "Radio Suara Al Muttaqin", audio_url: "", elapsed_seconds: 0 };
   const virtualTimeline = gapSeconds % TOTAL_FILLER_DURATION;
   let accumulatedTime = 0;
-
   for (const track of FILLER_PLAYLIST) {
-    if (
-      virtualTimeline >= accumulatedTime &&
-      virtualTimeline < accumulatedTime + track.duration
-    ) {
-      return {
-        title: track.title || titleFromAudioUrl(track.url),
-        audio_url: track.url,
-        elapsed_seconds: virtualTimeline - accumulatedTime,
-      };
+    if (virtualTimeline >= accumulatedTime && virtualTimeline < accumulatedTime + track.duration) {
+      return { title: track.title || titleFromAudioUrl(track.url), audio_url: track.url, elapsed_seconds: virtualTimeline - accumulatedTime };
     }
-
     accumulatedTime += track.duration;
   }
-
-  return {
-    title: FILLER_PLAYLIST[0].title || titleFromAudioUrl(FILLER_PLAYLIST[0].url),
-    audio_url: FILLER_PLAYLIST[0].url,
-    elapsed_seconds: 0,
-  };
+  return { title: FILLER_PLAYLIST[0].title || titleFromAudioUrl(FILLER_PLAYLIST[0].url), audio_url: FILLER_PLAYLIST[0].url, elapsed_seconds: 0 };
 }
 
 export async function GET() {
@@ -98,13 +61,27 @@ export async function GET() {
     const currentSecond = now.getSeconds();
 
     // =================================================================
+    // 0. DETEKSI YOUTUBE LIVE (opsional)
+    // Bisa dari environment variable atau API eksternal
+    // =================================================================
+    const isYouTubeLive = process.env.YOUTUBE_LIVE === "1"; // contoh
+    const YT_LIVE_URL = process.env.YOUTUBE_LIVE_URL || "";
+
+    if (isYouTubeLive && YT_LIVE_URL) {
+      return NextResponse.json({
+        active: true,
+        title: "YouTube Live Streaming",
+        program_title: "YouTube Live",
+        audio_url: YT_LIVE_URL,
+        elapsed_seconds: 0,
+        type: "youtube_live",
+      });
+    }
+
+    // =================================================================
     // A. JINGLE TIAP 5 MENIT, TAPI TIDAK DI MENIT 00
     // =================================================================
-    if (
-      currentMinute % 5 === 0 &&
-      currentMinute !== 0 &&
-      currentSecond < JINGLE_DURATION
-    ) {
+    if (currentMinute % 5 === 0 && currentMinute !== 0 && currentSecond < JINGLE_DURATION) {
       return NextResponse.json({
         active: true,
         title: titleFromAudioUrl(JINGLE_URL, "Jingle Suara Al Muttaqin"),
@@ -126,7 +103,6 @@ export async function GET() {
     if (!currentTrack) {
       const nowTimestampSeconds = Math.floor(Date.now() / 1000);
       const currentFiller = getVirtualFillerTrack(nowTimestampSeconds);
-
       return NextResponse.json({
         active: true,
         title: currentFiller.title,
@@ -147,7 +123,6 @@ export async function GET() {
     if (elapsedSeconds >= currentTrack.duration) {
       const gapSeconds = elapsedSeconds - currentTrack.duration;
       const currentFiller = getVirtualFillerTrack(gapSeconds);
-
       return NextResponse.json({
         active: true,
         title: currentFiller.title,
@@ -171,7 +146,6 @@ export async function GET() {
     });
   } catch (error: any) {
     console.error("Gagal memuat get-current-radio:", error);
-
     return NextResponse.json({
       active: true,
       title: FILLER_PLAYLIST[0].title,

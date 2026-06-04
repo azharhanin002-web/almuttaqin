@@ -1,9 +1,22 @@
 "use client";
 
+import { useEffect } from "react";
 import { useAudio } from "@/context/AudioContext";
 
 export default function LivePlayer() {
   const { isPlaying, togglePlay } = useAudio();
+
+  // ==========================
+  // Persistent playback saat pindah halaman
+  // ==========================
+  useEffect(() => {
+    const saved = JSON.parse(localStorage.getItem("isPlaying") || "false");
+    if (saved && !isPlaying) togglePlay();
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("isPlaying", JSON.stringify(isPlaying));
+  }, [isPlaying]);
 
   return (
     /**
@@ -37,7 +50,7 @@ export default function LivePlayer() {
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            togglePlay(); // Mengontrol sakelar audio tunggal global yang sama
+            togglePlay(); // global toggle, sinkron LiveSection
           }}
           className={`
             relative z-[10000] flex items-center gap-4 px-10 py-3.5 
@@ -52,7 +65,7 @@ export default function LivePlayer() {
         >
           {isPlaying ? (
             <>
-              {/* Equalizer Bar Efek Studio - Memantul dari dasar bawah */}
+              {/* Equalizer Bar Efek Studio */}
               <div className="flex gap-1 items-end h-4 mb-0.5">
                 <span className="w-1 bg-white rounded-full animate-[pulse_0.8s_infinite_100ms]" style={{ height: '50%' }}></span>
                 <span className="w-1 bg-white rounded-full animate-[pulse_0.5s_infinite_300ms]" style={{ height: '100%' }}></span>
@@ -68,7 +81,7 @@ export default function LivePlayer() {
           )}
         </button>
 
-        {/* SISI KANAN: Technical Stats (Dashboard Style) */}
+        {/* SISI KANAN: Technical Stats */}
         <div className="hidden lg:block border-l border-white/5 pl-8">
           <div className="flex flex-col items-end gap-1 text-right">
             <div className="flex items-center gap-2">
