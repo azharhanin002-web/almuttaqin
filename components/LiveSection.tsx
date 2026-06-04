@@ -53,11 +53,15 @@ export default function LiveSection() {
         `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${YOUTUBE_CHANNEL_ID}&type=video&eventType=live&key=${API_KEY}`
       );
       const data = await res.json();
+
       if (data.items && data.items.length > 0) {
         const videoId = data.items[0].id.videoId;
         setYoutubeVideoId(videoId);
         setYtThumbnail(data.items[0].snippet.thumbnails.medium.url || null);
         setIsYouTubeLive?.(true);
+
+        // Stop MP3 kalau live tersedia
+        if (isPlaying) togglePlay();
       } else {
         setYoutubeVideoId(null);
         setYtThumbnail(null);
@@ -80,18 +84,16 @@ export default function LiveSection() {
   }, []);
 
   // ==========================
-  // Handle Play Button
+  // Handle Play Click
   // ==========================
   const handlePlayClick = async () => {
-    // Stop MP3 terlebih dahulu jika aktif
-    if (isPlaying) togglePlay();
-
     if (youtubeVideoId && window.YT && iframeContainerRef.current) {
+      // Live menang, jalankan YouTube
       if (!playerRef.current) {
         playerRef.current = new window.YT.Player(iframeContainerRef.current, {
           videoId: youtubeVideoId,
           playerVars: {
-            autoplay: 0,       // autoplay aman di klik tombol
+            autoplay: 0, // klik tombol yang start
             controls: 0,
             modestbranding: 1,
             rel: 0,
@@ -104,7 +106,7 @@ export default function LiveSection() {
               setYtPlaying(true);
             },
             onStateChange: (event: any) => {
-              if (event.data === 0 || event.data === 2) setYtPlaying(false); // end/pause
+              if (event.data === 0 || event.data === 2) setYtPlaying(false);
             },
           },
         });
@@ -114,7 +116,7 @@ export default function LiveSection() {
         setYtPlaying(true);
       }
     } else {
-      // Jalankan MP3 bila tidak ada live
+      // Tidak ada live, jalankan MP3
       togglePlay();
     }
   };
@@ -125,7 +127,6 @@ export default function LiveSection() {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
@@ -215,7 +216,7 @@ export default function LiveSection() {
         {/* CARD */}
         <div className="rounded-2xl lg:rounded-3xl border border-emerald-500/20 bg-white/5 backdrop-blur-xl p-4 sm:p-6 lg:p-8 shadow-2xl">
           <div className="flex flex-col md:flex-row items-center gap-5 sm:gap-6 lg:gap-8">
-            {/* COVER: MP3 atau YouTube */}
+            {/* COVER */}
             <div className="relative w-32 h-32 sm:w-40 sm:h-40 lg:w-44 lg:h-44 shrink-0">
               <div className="absolute inset-0 rounded-2xl bg-emerald-500/20 blur-3xl animate-pulse" />
               <img
@@ -228,18 +229,16 @@ export default function LiveSection() {
 
             {/* CONTENT */}
             <div className="flex-1 w-full">
-              {/* VISUALIZER */}
               <div className="h-20 sm:h-24 lg:h-28 bg-black rounded-xl overflow-hidden border border-emerald-500/20">
                 <canvas ref={canvasRef} className="w-full h-full" />
               </div>
 
-              {/* INFO */}
               <div className="mt-4 text-center md:text-left">
                 <h3 className="text-lg sm:text-xl lg:text-2xl font-black text-white leading-tight">
                   {metadata?.title || "Radio Suara Al Muttaqin"}
                 </h3>
                 <p className="mt-2 text-xs sm:text-sm text-emerald-400 uppercase tracking-wider">
-                  {metadata?.artist || (ytPlaying ? "YouTube Live" : "Virtual Live Stream")}
+                  {ytPlaying ? "YouTube Live" : "Virtual Live Stream"}
                 </p>
               </div>
             </div>
