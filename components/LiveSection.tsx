@@ -20,19 +20,22 @@ export default function LiveSection() {
     isPlaying = false,
     togglePlay = () => {},
     analyserRef,
-    metadata = { title: "Radio Suara Al Muttaqin", artist: "Virtual Auto DJ", art: "/bg-player.png" },
+    metadata,
     listeners = 0,
     setIsYouTubeLive,
   } = useAudio() || {};
 
   const [youtubeVideoId, setYoutubeVideoId] = useState<string | null>(null);
-  const [ytPlaying, setYtPlaying] = useState(false); 
-  const [coverUrl, setCoverUrl] = useState(metadata.art);
+  const [ytPlaying, setYtPlaying] = useState(false);
+  const [ytThumbnail, setYtThumbnail] = useState<string | null>(null);
+
   const playerRef = useRef<any>(null);
   const iframeContainerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Load YouTube API
+  // ==========================
+  // Load YouTube IFrame API
+  // ==========================
   useEffect(() => {
     if (!window.YT) {
       const tag = document.createElement("script");
@@ -41,7 +44,9 @@ export default function LiveSection() {
     }
   }, []);
 
-  // Check Live
+  // ==========================
+  // Check YouTube Live
+  // ==========================
   async function checkYouTubeLiveStatus() {
     try {
       const res = await fetch(
@@ -51,20 +56,20 @@ export default function LiveSection() {
       if (data.items && data.items.length > 0) {
         const videoId = data.items[0].id.videoId;
         setYoutubeVideoId(videoId);
+        setYtThumbnail(data.items[0].snippet.thumbnails.medium.url || null);
         setIsYouTubeLive?.(true);
-        setCoverUrl(data.items[0].snippet.thumbnails.medium.url); // update thumbnail live
       } else {
         setYoutubeVideoId(null);
+        setYtThumbnail(null);
         setIsYouTubeLive?.(false);
         setYtPlaying(false);
-        setCoverUrl(metadata.art); // fallback MP3 cover
       }
     } catch (err) {
       console.error("YouTube API error", err);
       setYoutubeVideoId(null);
+      setYtThumbnail(null);
       setIsYouTubeLive?.(false);
       setYtPlaying(false);
-      setCoverUrl(metadata.art);
     }
   }
 
@@ -74,9 +79,11 @@ export default function LiveSection() {
     return () => clearInterval(interval);
   }, []);
 
-  // Play YouTube on click
+  // ==========================
+  // Handle Play Button
+  // ==========================
   const handlePlayClick = async () => {
-    // hentikan MP3
+    // Stop MP3 terlebih dahulu jika aktif
     if (isPlaying) togglePlay();
 
     if (youtubeVideoId && window.YT && iframeContainerRef.current) {
@@ -84,11 +91,12 @@ export default function LiveSection() {
         playerRef.current = new window.YT.Player(iframeContainerRef.current, {
           videoId: youtubeVideoId,
           playerVars: {
-            autoplay: 1,
+            autoplay: 0,       // autoplay aman di klik tombol
             controls: 0,
             modestbranding: 1,
             rel: 0,
             playsinline: 1,
+            mute: 0,
           },
           events: {
             onReady: (event: any) => {
@@ -96,7 +104,7 @@ export default function LiveSection() {
               setYtPlaying(true);
             },
             onStateChange: (event: any) => {
-              if (event.data === 0 || event.data === 2) setYtPlaying(false);
+              if (event.data === 0 || event.data === 2) setYtPlaying(false); // end/pause
             },
           },
         });
@@ -106,20 +114,25 @@ export default function LiveSection() {
         setYtPlaying(true);
       }
     } else {
-      // jika tidak live, jalankan MP3
+      // Jalankan MP3 bila tidak ada live
       togglePlay();
-      setCoverUrl(metadata.art); 
     }
   };
 
+  // ==========================
   // Visualizer
+  // ==========================
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const resize = () => { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; };
+    const resize = () => {
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+    };
     resize();
     window.addEventListener("resize", resize);
 
@@ -128,6 +141,7 @@ export default function LiveSection() {
 
     const draw = () => {
       animationId = requestAnimationFrame(draw);
+      if (!canvas.width || !canvas.height) return;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       if ((!isPlaying && !ytPlaying) || !analyserRef?.current) return;
 
@@ -145,10 +159,15 @@ export default function LiveSection() {
       bass /= 10;
 
       if (bass > 180) flashAlpha = 0.5;
-      if (flashAlpha > 0) { ctx.fillStyle = `rgba(0,255,200,${flashAlpha})`; ctx.fillRect(0, 0, width, height); flashAlpha -= 0.03; }
+      if (flashAlpha > 0) {
+        ctx.fillStyle = `rgba(0,255,200,${flashAlpha})`;
+        ctx.fillRect(0, 0, width, height);
+        flashAlpha -= 0.03;
+      }
 
       const barCount = 120;
       const spacing = width / barCount;
+
       ctx.shadowBlur = 20;
       ctx.shadowColor = "#00ffcc";
 
@@ -176,28 +195,31 @@ export default function LiveSection() {
     };
 
     draw();
-    return () => { cancelAnimationFrame(animationId); window.removeEventListener("resize", resize); };
+    return () => {
+      cancelAnimationFrame(animationId);
+      window.removeEventListener("resize", resize);
+    };
   }, [isPlaying, ytPlaying, analyserRef]);
 
   return (
     <section className="relative overflow-hidden bg-black py-12 sm:py-16 lg:py-20 px-4 sm:px-6">
       <div className="absolute inset-0 bg-gradient-to-b from-black via-emerald-950/80 to-black" />
       <div className="relative z-20 mx-auto max-w-6xl">
-
+        {/* TITLE */}
         <div className="text-center mb-6 sm:mb-8 lg:mb-10">
           <h2 className="text-sm sm:text-lg md:text-xl lg:text-2xl font-black text-emerald-400 uppercase tracking-[0.2em] sm:tracking-[0.35em]">
             ⚡ ON AIR NOW ⚡
           </h2>
         </div>
 
+        {/* CARD */}
         <div className="rounded-2xl lg:rounded-3xl border border-emerald-500/20 bg-white/5 backdrop-blur-xl p-4 sm:p-6 lg:p-8 shadow-2xl">
           <div className="flex flex-col md:flex-row items-center gap-5 sm:gap-6 lg:gap-8">
-
-            {/* COVER */}
+            {/* COVER: MP3 atau YouTube */}
             <div className="relative w-32 h-32 sm:w-40 sm:h-40 lg:w-44 lg:h-44 shrink-0">
               <div className="absolute inset-0 rounded-2xl bg-emerald-500/20 blur-3xl animate-pulse" />
               <img
-                src={coverUrl}
+                src={ytPlaying && ytThumbnail ? ytThumbnail : metadata?.art || "/bg-player.png"}
                 alt={metadata?.title}
                 onError={(e) => { (e.target as HTMLImageElement).src = "/bg-player.png"; }}
                 className="relative z-10 w-full h-full object-cover rounded-2xl border border-white/20"
@@ -206,21 +228,24 @@ export default function LiveSection() {
 
             {/* CONTENT */}
             <div className="flex-1 w-full">
+              {/* VISUALIZER */}
               <div className="h-20 sm:h-24 lg:h-28 bg-black rounded-xl overflow-hidden border border-emerald-500/20">
                 <canvas ref={canvasRef} className="w-full h-full" />
               </div>
 
+              {/* INFO */}
               <div className="mt-4 text-center md:text-left">
                 <h3 className="text-lg sm:text-xl lg:text-2xl font-black text-white leading-tight">
                   {metadata?.title || "Radio Suara Al Muttaqin"}
                 </h3>
                 <p className="mt-2 text-xs sm:text-sm text-emerald-400 uppercase tracking-wider">
-                  {metadata?.artist || "Virtual Live Stream"}
+                  {metadata?.artist || (ytPlaying ? "YouTube Live" : "Virtual Live Stream")}
                 </p>
               </div>
             </div>
           </div>
 
+          {/* FOOTER */}
           <div className="mt-6 flex flex-col sm:flex-row gap-4 sm:gap-3 sm:items-center sm:justify-between">
             <div className="text-center sm:text-left text-emerald-400 text-sm font-bold">
               👥 {listeners} Pendengar
@@ -239,9 +264,8 @@ export default function LiveSection() {
           </div>
         </div>
 
-        {/* YouTube audio-only */}
+        {/* YouTube Player hidden */}
         <div ref={iframeContainerRef} style={{ width: 1, height: 1, opacity: 0, overflow: "hidden" }} />
-
       </div>
     </section>
   );
