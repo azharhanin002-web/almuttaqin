@@ -14,7 +14,7 @@ const FILLER_PLAYLIST = [
   {
     title: "Murottal Jeda - Surah Al-Mulk",
     url: "https://sdit.my.id/radio/SurahAlMulk-Saad-Al-Ghamdi.mp3",
-    duration: 366,
+    duration: 415,
   },
   {
     title: "Nasyid Jeda - Rikhie Asbo",
@@ -24,13 +24,29 @@ const FILLER_PLAYLIST = [
   {
     title: "Murottal Jeda - Surah Al-Waqiah",
     url: "https://sdit.my.id/radio/al-waqiah-ust-shidqy.mp3",
-    duration: 7254,
+    duration: 780,
   },
   {
     title: "Nasyid Jeda - Hanya Rindu Versi Arab",
     url: "https://sdit.my.id/radio/hanya-rindu-versi-arab.mp3",
     duration: 258,
   },
+  {
+    title: "Murottal Jeda - Al Fatihah Syaikh Abdullah Al-Mathrud",
+    url: "https://dn710102.ca.archive.org/0/items/abdullahal-mathrud/001-Al-Fatihah.mp3",
+    duration: 27,
+  },
+  {
+    title: "Murottal Jeda - Al Baqarah Syaikh Abdullah Al-Mathrud",
+    url: "https://dn710102.ca.archive.org/0/items/abdullahal-mathrud/002-Al-Baqarah.mp3",
+    duration: 7200,
+  },
+  {
+    title: "Murottal Jeda - Ali Imron Syaikh Abdullah Al-Mathrud",
+    url: "https://ia801406.us.archive.org/8/items/abdullahal-mathrud/003-Ali-Imran.mp3",
+    duration: 4800,
+  },
+
 ];
 
 const TOTAL_FILLER_DURATION = FILLER_PLAYLIST.reduce(
