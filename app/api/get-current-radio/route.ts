@@ -29,7 +29,7 @@ const FILLER_PLAYLIST = [
   {
     title: "Nasyid Jeda - Hanya Rindu Versi Arab",
     url: "https://sdit.my.id/radio/hanya-rindu-versi-arab.mp3",
-    duration: 7254,
+    duration: 258,
   },
 ];
 

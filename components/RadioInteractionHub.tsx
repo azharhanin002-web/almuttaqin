@@ -31,6 +31,8 @@ export default function RadioInteractionHub() {
     { time: "07:00", title: "Pengajian Umum", icon: "📖" },
 	{ time: "09:00", title: "Kajian Aqidah", icon: "📖" },
     { time: "10:00", title: "Kajian Keluarga Sakinah", icon: "🏠" },
+	{ time: "11:00", title: "Kajian ustadz Alumni", icon: "📖" },
+	{ time: "12:00", title: "Murottal Siang", icon: "🎵" },
     { time: "13:00", title: "Kajian Tematik", icon: "💡" },
     { time: "16:00", title: "Taujih Sore Ust. Sartono", icon: "🌇" },
     { time: "17:00", title: "Murottal Anak", icon: "🌙" },
