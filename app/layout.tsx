@@ -5,6 +5,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import LivePlayer from "@/components/LivePlayer";
 import { Providers } from "@/components/Providers";
+import LayoutWrapper from "@/components/LayoutWrapper"; // 🟢 IMPOR: Memanggil wrapper kondisional cerdas antum
 
 /* =================================================================
    1. VIEWPORT CONFIG (Dioptimalkan untuk PWA Standalone & Notch HP)
@@ -21,7 +22,7 @@ export const viewport: Viewport = {
    2. SEO MASTER & PWA CONFIGURATION (OFFICIAL DOMAIN UPDATE)
    ================================================================= */
 export const metadata: Metadata = {
-  // 1. DIUBAH KE DOMAIN BARU (Sangat penting untuk generate sitemap & link kanonikal otomatis)
+  // Metadata dasar untuk generate sitemap & link kanonikal otomatis
   metadataBase: new URL("https://radioalmuttaqin.com"), 
   manifest: "/manifest.json", 
   
@@ -88,7 +89,7 @@ export const metadata: Metadata = {
     ],
   },
 
-  // OpenGraph (DIUBAH KE DOMAIN BARU agar share link ke WA/FB tidak pecah)
+  // OpenGraph (Biar share link ke WA/FB tidak pecah)
   openGraph: {
     type: "website",
     locale: "id_ID",
@@ -145,27 +146,12 @@ export default function RootLayout({
     <html lang="id" className="scroll-smooth">
       <body className="bg-slate-50 text-slate-900 antialiased font-sans selection:bg-emerald-100 selection:text-emerald-900">
         
-        {/* ✅ Wrapper Global Providers (Audio State & Session) */}
+        {/* Wrapper Global Providers (Audio State & Session) */}
         <Providers>
-          <div className="flex flex-col min-h-screen">
-            
-            {/* NAVBAR (Header) */}
-            <header className="fixed top-0 left-0 w-full z-50">
-              <Navbar />
-            </header>
-
-            {/* CONTENT AREA */}
-            <main className="flex-grow pt-24 md:pt-28">
-              {children}
-            </main>
-
-            {/* FOOTER */}
-            <Footer />
-
-            {/* LIVE RADIO PLAYER (Tetap Berjalan Global Saat Pindah Halaman) */}
-            <LivePlayer />
-
-          </div>
+          {/* 🚀 BERSIH TOTAL: Menggunakan LayoutWrapper kondisional pintar milik antum */}
+          <LayoutWrapper>
+            {children}
+          </LayoutWrapper>
         </Providers>
 
       </body>
