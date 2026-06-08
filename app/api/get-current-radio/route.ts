@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
-// 🟢 FIX JALUR IMPOR: Mundur 3 tingkat dari app/api/get-current-radio menuju root folder sanity/lib/client
+// 🟢 FIX JALUR IMPOR: Mengunci rute relatif 3 tingkat menuju root folder sanity/lib/client
 import { client } from "../../../sanity/lib/client"; 
 
 export const dynamic = "force-dynamic"; // Memaksa API selalu fresh tanpa membeku di cache Vercel
@@ -61,8 +61,10 @@ const TOTAL_FILLER_DURATION = FILLER_PLAYLIST.reduce(
 // Fungsi pembantu mengubah string "HH:MM" menjadi total menit
 const timeToMinutes = (timeStr: string): number => {
   if (!timeStr) return 0;
-  const [hours, minutes] = timeStr.split(':').map(Number);
-  return hours * 60 + minutes;
+  // Memastikan pemisahan string tetap aman meski admin menulis pakai tanda titik (.) atau titik dua (:)
+  const cleanTime = timeStr.replace('.', ':');
+  const [hours, minutes] = cleanTime.split(':').map(Number);
+  return (hours || 0) * 60 + (minutes || 0);
 };
 
 function titleFromAudioUrl(audioUrl?: string, fallback = "Radio Suara Al Muttaqin") {
@@ -115,8 +117,6 @@ function getVirtualFillerTrack(gapSeconds: number) {
 export async function GET() {
   try {
     const now = new Date();
-    const currentMinute = now.getMinutes();
-    const currentSecond = now.getSeconds();
 
     // =================================================================
     // 0. PRIORITAS UTAMA: DETEKSI JADWAL HYBRID + HARI DARI SANITY CMS
@@ -175,8 +175,15 @@ export async function GET() {
           const start = timeToMinutes(schedule.startTime);
           const end = timeToMinutes(schedule.endTime);
 
+          // Evaluasi Jam & Hari dibikin super toleran (case-insensitive & dipotong spasi liar)
           const isTimeMatch = currentTotalMinutes >= start && currentTotalMinutes < end;
-          const isDayMatch = schedule.day === 'everyday' || schedule.day === currentDayName;
+          
+          const sDay = (schedule.day || '').trim().toLowerCase();
+          const cDay = currentDayName.trim().toLowerCase();
+          const isDayMatch = sDay === 'everyday' || sDay === cDay;
+
+          // 🔍 DEBUGGING LOG: Memantau kecocokan data langsung di terminal proyek Anda
+          console.log(`[Sanity Sync] Program: ${schedule.eventName} | Hari: ${schedule.day} vs ${currentDayName} (${isDayMatch}) | Jam: ${schedule.startTime}-${schedule.endTime} vs Sekarang (${isTimeMatch})`);
 
           if (isTimeMatch && isDayMatch) {
             activeSchedule = schedule;
@@ -200,7 +207,7 @@ export async function GET() {
               youtube_video_id: videoId,
               thumbnail: videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : "/bg-player.png",
               title: activeSchedule.eventName || "Live Streaming YouTube",
-              artist: activeSchedule.speaker || "PCM Kembaran",
+              artist: activeSchedule.speaker || "Pondok Pesantren Al Muttaqin",
               program_title: stationName,
               audio_url: videoId ? `https://www.youtube.com/watch?v=${videoId}` : null,
               elapsed_seconds: 0
@@ -238,13 +245,13 @@ export async function GET() {
               youtube_video_id: null,
               thumbnail: "/bg-player.png",
               title: selectedTrack?.trackTitle || activeSchedule.eventName,
-              artist: selectedTrack?.speaker || activeSchedule.speaker || "PCM Kembaran",
+              artist: selectedTrack?.speaker || activeSchedule.speaker || "Pondok Pesantren Al Muttaqin",
               program_title: stationName,
               audio_url: selectedTrack?.audioFileUrl || null,
               elapsed_seconds: trackElapsedSeconds,
             });
           } else {
-            // BACKUP FILLER: Jika playlist kosong di Sanity, putar filler otomatis
+            // BACKUP FILLER INTERNAL SANITY: Jika playlist di dokumen aktif kosong, putar filler otomatis
             const totalFillerTracks = FILLER_PLAYLIST.length;
             const totalTrackIndexTimeline = Math.floor(secondsSinceScheduleStarted / ASSUMED_TRACK_DURATION);
             const currentFillerIndex = totalTrackIndexTimeline % totalFillerTracks;
@@ -258,7 +265,7 @@ export async function GET() {
               youtube_video_id: null,
               thumbnail: "/bg-player.png",
               title: selectedFiller.title,
-              artist: activeSchedule.speaker || "PCM Kembaran",
+              artist: activeSchedule.speaker || "Pondok Pesantren Al Muttaqin",
               program_title: activeSchedule.eventName || stationName,
               audio_url: selectedFiller.url,
               elapsed_seconds: trackElapsedSeconds,
@@ -269,6 +276,11 @@ export async function GET() {
     } catch (sanityError) {
       console.error("Gagal memproses otomatisasi jadwal Sanity CMS:", sanityError);
     }
+
+    // Ambal ulang menit dan detik untuk jingle cadangan
+    const freshNow = new Date();
+    const currentMinute = freshNow.getMinutes();
+    const currentSecond = freshNow.getSeconds();
 
     // =================================================================
     // A. JINGLE TIAP 5 MENIT (CRON BACKEND LAMA)
