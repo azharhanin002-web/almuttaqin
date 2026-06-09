@@ -7,7 +7,7 @@ import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
 /**
- * [GET] - Mengambil semua artikel untuk tabel admin
+ * [GET] - Mengambil semua artikel untuk tabel admin brrrrrrrrrrrrrrooo
  */
 export async function GET(req: NextRequest) {
   try {
