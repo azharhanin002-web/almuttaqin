@@ -2,9 +2,8 @@ import { NextResponse } from 'next/server';
 import { client } from '@/sanity/lib/client';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 0; // Mematikan cache statis Vercel secara total demi real-time penayangan
+export const revalidate = 0;
 
-// Fungsi pembantu mengubah string "HH:MM" atau "HH.MM" menjadi total menit (Antipeluru)
 const timeToMinutes = (timeStr: string): number => {
   if (!timeStr) return 0;
   const cleanTime = timeStr.replace('.', ':');
@@ -32,7 +31,6 @@ export async function GET() {
     const config = await client.fetch(sanityQuery, {}, { cache: 'no-store' });
 
     if (config?.schedules && Array.isArray(config.schedules)) {
-      // 1. Ekstraksi Waktu lokal Asia/Jakarta (WIB) presisi untuk serverless
       const timeFormatter = new Intl.DateTimeFormat('id-ID', {
         timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
       });
@@ -42,16 +40,14 @@ export async function GET() {
       const currentSecs = Number(timeParts.find(p => p.type === 'second')?.value || 0);
       const currentTotalMinutes = currentHours * 60 + currentMinutes;
 
-      // 2. Ambil nama hari WIB dan paksa menjadi huruf kecil total (contoh: "thursday")
       const dayFormatter = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Jakarta', weekday: 'long' });
-      const currentDayName = dayFormatter.format(now).trim().toLowerCase(); 
+      const currentDayName = dayFormatter.format(now).trim().toLowerCase();
 
       for (const schedule of config.schedules) {
         const start = timeToMinutes(schedule.startTime);
         const end = timeToMinutes(schedule.endTime);
         const isTimeMatch = currentTotalMinutes >= start && currentTotalMinutes < end;
         
-        // 🟢 FIX UTAMA: Menyamakan huruf kecil nama hari dari Sanity agar pencocokan berhasil 100%
         const sDay = (schedule.day || '').trim().toLowerCase();
         const isDayMatch = sDay === 'everyday' || sDay === currentDayName;
 
@@ -76,7 +72,6 @@ export async function GET() {
     console.error('Sanity Error:', sanityError);
   }
 
-  // OPER PARAMETER MATANG LANGSUNG KE CORE LARAVEL HAWKHOST
   const HAWKHOST_CORE_URL = `http://ybmsaum.com/radio/stream.php?mode=${broadcastMode}&stream_url=${encodeURIComponent(targetAudioUrl)}&current_seconds=${secondsSinceStarted}`;
 
   try {
@@ -89,12 +84,34 @@ export async function GET() {
       return new NextResponse('Radio Offline (Hawkhost Unreachable)', { status: 503 });
     }
 
-    return new NextResponse(response.body, {
+    // 🟢 SOLUSI JITU: Gunakan TransformStream untuk menjamin data biner dialirkan secara hidup (Streaming)
+    const { readable, writable } = new TransformStream();
+    const writer = writable.getWriter();
+    const reader = response.body.getReader();
+
+    // Jalankan proses pemindahan chunk biner di latar belakang (Async Pipe)
+    (async () => {
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          await writer.write(value);
+        }
+      } catch (err) {
+        console.error("Stream piping error:", err);
+      } finally {
+        try { writer.close(); } catch (_) {}
+        try { reader.releaseLock(); } catch (_) {}
+      }
+    })();
+
+    return new NextResponse(readable, {
       headers: {
         'Content-Type': 'audio/mpeg',
         'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
         'Pragma': 'no-cache',
         'Expires': '0',
+        'X-Accel-Buffering': 'no', // Cegah proxy penahan buffer
       },
     });
   } catch (error) {
