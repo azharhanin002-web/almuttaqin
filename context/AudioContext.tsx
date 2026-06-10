@@ -52,6 +52,10 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const isPlayingRef = useRef(false);
   const isYouTubePlayingRef = useRef(false);
 
+  // 🟢 STATE BARU: Melacak status adzan secara global di level client untuk pengaman jingle
+  const [isCurrentlyAdzan, setIsCurrentlyAdzan] = useState(false);
+  const isCurrentlyAdzanRef = useRef(false);
+
   useEffect(() => {
     isPlayingRef.current = isPlaying;
   }, [isPlaying]);
@@ -138,8 +142,20 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     youtubeToggleRef.current = handler;
   }, []);
 
+  // 🟢 FIX LOGIKA JINGLE: Mengunci gerbang jingle agar mati total saat adzan berkumandang
   const playJingle = useCallback(() => {
     try {
+      // Jika adzan sedang aktif, blokir total jingle dari pemutaran
+      if (isCurrentlyAdzanRef.current) {
+        if (jingleRef.current && isJinglePlayingRef.current) {
+          jingleRef.current.pause();
+          jingleRef.current.currentTime = 0;
+          isJinglePlayingRef.current = false;
+          if (audioRef.current && isPlayingRef.current) audioRef.current.volume = 1;
+        }
+        return;
+      }
+
       if (!isPlayingRef.current || isYouTubePlayingRef.current || isJinglePlayingRef.current) {
         return;
       }
@@ -179,7 +195,8 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
       jingleRef.current.onended = () => {
         const mainAudioElement = audioRef.current;
-        if (isPlayingRef.current && mainAudioElement) {
+        // Kembalikan volume normal hanya jika tidak mendadak masuk waktu adzan
+        if (isPlayingRef.current && mainAudioElement && !isCurrentlyAdzanRef.current) {
           mainAudioElement.volume = 1;
         }
         isJinglePlayingRef.current = false;
@@ -233,6 +250,8 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       
       if (!data || !data.active) {
         setIsYouTubeLive(false);
+        setIsCurrentlyAdzan(false);
+        isCurrentlyAdzanRef.current = false;
         setMetadata({ 
           title: data?.title || "Siaran Sedang Offline", 
           artist: data?.artist || "Radio Suara Al Muttaqin", 
@@ -244,6 +263,15 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
       // Deteksi Apakah Detik Ini Bertepatan Dengan Waktu Adzan Jepara
       const isAdzanTime = data.title && data.title.toLowerCase().includes("adzan");
+      setIsCurrentlyAdzan(!!isAdzanTime);
+      isCurrentlyAdzanRef.current = !!isAdzanTime;
+
+      // 🟢 DETEKSI KILAT: Jika adzan baru dimulai dan jingle tidak sengaja sedang bunyi, langsung matikan
+      if (isAdzanTime && jingleRef.current && isJinglePlayingRef.current) {
+        jingleRef.current.pause();
+        jingleRef.current.currentTime = 0;
+        isJinglePlayingRef.current = false;
+      }
 
       // 🔴 CASE A: AREA TRANSMISI YOUTUBE LIVE (Hanya berjalan jika sedang tidak Adzan)
       if (data.type === "youtube_live" && !isAdzanTime) {
@@ -432,8 +460,9 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     }
 
     const checkAndTriggerJingle = () => {
+      // 🟢 FIX INTERVAL: Jangan picu jingle jika state adzan sedang aktif
       const isUserListening = isPlayingRef.current || isYouTubePlayingRef.current;
-      if (isUserListening) {
+      if (isUserListening && !isCurrentlyAdzanRef.current) {
         playJingle();
       }
     };
