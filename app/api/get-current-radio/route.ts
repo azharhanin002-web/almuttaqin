@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
-// 🟢 FIX JALUR IMPOR: Mengunci rute relatif 3 tingkat menuju root folder sanity/lib/client
+// 🟢 JALUR IMPOR TERKUNCI: Mengunci rute relatif 3 tingkat menuju root folder sanity/lib/client
 import { client } from "../../../sanity/lib/client"; 
 
 export const dynamic = "force-dynamic"; // Memaksa API selalu fresh tanpa membeku di cache Vercel
@@ -15,7 +15,6 @@ const ADZAN_DURATION_SECONDS = 300; // Estimasi durasi file adzan.mp3 Anda (5 me
 
 // Konfigurasi Aladhan API Menggunakan Alamat Presisi Wilayah Jepara
 const JEPARA_ADDRESS = "Jepara,Central+Java,Indonesia";
-const METHOD_KEMENAG = 20; // Metode Kemenag RI / MABIMS Toleransi Selaras
 
 // =================================================================
 // 2. KONFIGURASI JINGLE OTOMATIS
@@ -159,7 +158,7 @@ export async function GET() {
     // 📿 KASTA TERTINGGI (KASTA 0): INTERUPSI ADZAN OTOMATIS JEPARA
     // =================================================================
     try {
-      // 🟢 PERBAIKAN UTAMA: Ambil kalender tanggal hari ini presisi WIB di Jepara (DD-MM-YYYY)
+      // Ambil kalender tanggal hari ini presisi WIB di Jepara (DD-MM-YYYY)
       const jktDateFormatter = new Intl.DateTimeFormat('id-ID', {
         timeZone: 'Asia/Jakarta',
         day: '2-digit',
@@ -167,13 +166,12 @@ export async function GET() {
         year: 'numeric'
       });
       
-      // Mengubah format lokal "11/06/2026" menjadi "11-06-2026" sesuai standar API Aladhan
       const formattedDateForAPI = jktDateFormatter.format(now).replace(/\//g, '-');
 
-      // Tembak API Aladhan berdasarkan alamat geografis terikat kalender tetap WIB
+      // 🟢 PERBAIKAN SAKRAL TUNING: Menggunakan method=KEMENAG string eksplisit & pengunci ritme bimas islam
       const prayerRes = await fetch(
-        `https://api.aladhan.com/v1/timingsByAddress/${formattedDateForAPI}?address=${JEPARA_ADDRESS}&method=${METHOD_KEMENAG}`,
-        { next: { revalidate: 3600 } } // Cache aman 1 jam di jaringan Vercel edge
+        `https://api.aladhan.com/v1/timingsByAddress/${formattedDateForAPI}?address=${JEPARA_ADDRESS}&method=KEMENAG&tune=0,0,0,0,0,0,0,0,0`,
+        { next: { revalidate: 3600 } } 
       );
       
       if (prayerRes.ok) {
@@ -181,7 +179,7 @@ export async function GET() {
         const timings = prayerData?.data?.timings;
 
         if (timings) {
-          // Kita ambil 5 Waktu Sholat Wajib Utama Jepara
+          // Mengambil 5 Waktu Sholat Wajib Utama Jepara
           const jadwalSholatWajib = [
             { nama: "Adzan Subuh", waktu: timings.Fajr },
             { nama: "Adzan Dzuhur", waktu: timings.Dhuhr },
