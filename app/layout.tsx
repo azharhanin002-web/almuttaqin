@@ -5,13 +5,13 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import LivePlayer from "@/components/LivePlayer";
 import { Providers } from "@/components/Providers";
-import LayoutWrapper from "@/components/LayoutWrapper"; // 🟢 IMPOR: Memanggil wrapper kondisional cerdas antum
+import LayoutWrapper from "@/components/LayoutWrapper"; // Wrapper kondisional cerdas antum
 
 /* =================================================================
    1. VIEWPORT CONFIG (Dioptimalkan untuk PWA Standalone & Notch HP)
    ================================================================= */
 export const viewport: Viewport = {
-  themeColor: "#059669", // Disamakan dengan theme_color di manifest.json (#059669)
+  themeColor: "#059669", // Disamakan dengan theme_color di manifest.json
   width: "device-width",
   initialScale: 1,
   maximumScale: 5, // Diizinkan zoom untuk aksesibilitas, tetapi tetap ramah UI PWA
@@ -148,10 +148,17 @@ export default function RootLayout({
         
         {/* Wrapper Global Providers (Audio State & Session) */}
         <Providers>
-          {/* 🚀 BERSIH TOTAL: Menggunakan LayoutWrapper kondisional pintar milik antum */}
+          
+          {/* 🚀 LAYOUT CONTENT LAYER: Menangani siklus mount/unmount halaman dinamis Next.js */}
           <LayoutWrapper>
             {children}
           </LayoutWrapper>
+
+          {/* 🟢 AMAN ABADI (ANTI TERPUTUS): LivePlayer diletakkan di luar LayoutWrapper.
+              Ketika jemaah pindah rute ke blogdetail, LayoutWrapper boleh memuat ulang komponennya,
+              tetapi komponen LivePlayer ini akan tetap anteng berdiri kokoh tanpa re-render! */}
+          <LivePlayer />
+          
         </Providers>
 
       </body>
