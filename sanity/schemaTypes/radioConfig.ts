@@ -177,7 +177,7 @@ export default {
                 rule.custom((value, context: any) => {
                   const tracks = value as any[];
                   if (context.parent?.broadcastMode === 'playlist_mp3' && (!tracks || tracks.length === 0)) {
-                    return 'Minimal unggah 1 file audio MP3 ke dalam playlist antrean.';
+                    return 'Minimal isi 1 track link audio ke dalam playlist antrean.';
                   }
                   return true;
                 }),
@@ -191,13 +191,13 @@ export default {
                     { name: 'trackTitle', title: 'Judul Audio', type: 'string', validation: (rule: Rule) => rule.required().error('Judul track audio tidak boleh kosong.') },
                     { name: 'speaker', title: 'Narasumber / Pengisi', type: 'string' },
                     { 
-  name: 'audioFile', 
-  title: 'Upload File Audio', 
-  type: 'file',
-  // 👇 UPDATE BARIS INI: Tambahkan mime type untuk m4a/aac
-  options: { accept: 'audio/mp3, audio/mpeg, audio/m4a, audio/x-m4a, audio/aac' },
-  validation: (rule: Rule) => rule.required().error('Wajib mengunggah file audio.')
-},
+                      name: 'audioUrl', 
+                      title: 'Link Tautan Langsung Audio (Direct Link .mp3)', 
+                      type: 'url',
+                      description: 'Masukkan URL mp3 langsung dari archive.org, cloud storage, atau server luar. Pastikan tautan berakhiran .mp3',
+                      placeholder: 'https://archive.org/download/folder-audio/file.mp3',
+                      validation: (rule: Rule) => rule.required().error('Wajib memasukkan tautan langsung file audio.')
+                    },
                   ],
                   preview: {
                     select: {
