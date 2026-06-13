@@ -1,15 +1,28 @@
 "use client";
 
 import { useEffect } from "react";
+import { usePathname } from "next/navigation"; // 🟢 Ambil hook rute Next.js
 import { useAudio } from "@/context/AudioContext";
 
 export default function LivePlayer() {
+  const pathname = usePathname(); // 🟢 Deklarasikan pemantau jalur URL aktif
+  
   const {
     isPlaying,
     isYouTubePlaying,
     isYouTubeLive,
     toggleLivePlayback,
   } = useAudio();
+
+  // 🟢 JALUR MALES: Jika admin sedang di area studio / admin, potong kompilasi (batal render)
+  if (
+    pathname === "/studio" || 
+    pathname?.startsWith("/studio/") || 
+    pathname === "/admin" || 
+    pathname?.startsWith("/admin/")
+  ) {
+    return null;
+  }
 
   const isLiveActive = isPlaying || isYouTubePlaying;
 
