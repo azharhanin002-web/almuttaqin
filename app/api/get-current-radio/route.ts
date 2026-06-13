@@ -48,17 +48,17 @@ const FILLER_PLAYLIST = [
   },
   {
     title: "Murottal Jeda - Al Fatihah Syaikh Abdullah Al-Mathrud",
-    url: "https://dn710102.ca.archive.org/0/items/abdullahal-mathrud/001-Al-Fatihah.mp3",
+    url: "https://archive.org/download/abdullahal-mathrud/001-Al-Fatihah.mp3",
     duration: 27,
   },
   {
     title: "Murottal Jeda - Al Baqarah Syaikh Abdullah Al-Mathrud",
-    url: "https://dn710102.ca.archive.org/0/items/abdullahal-mathrud/002-Al-Baqarah.mp3",
+    url: "https://archive.org/download/abdullahal-mathrud/002-Al-Baqarah.mp3",
     duration: 7200,
   },
   {
     title: "Murottal Jeda - Ali Imron Syaikh Abdullah Al-Mathrud",
-    url: "https://ia801406.us.archive.org/8/items/abdullahal-mathrud/003-Ali-Imran.mp3",
+    url: "https://archive.org/download/abdullahal-mathrud/003-Ali-Imran.mp3",
     duration: 4800,
   },
 ];
@@ -222,6 +222,7 @@ export async function GET() {
     // 0. PRIORITAS KASTA 1: DETEKSI JADWAL HYBRID FROM SANITY CMS
     // =================================================================
     try {
+      // 🟢 PERBAIKAN SAKRAL 1: Mengubah pencarian GROQ query untuk langsung menarik string audioUrl baru
       const sanityQuery = `
         *[_type == "radioConfig"][0] {
           radioName,
@@ -238,7 +239,7 @@ export async function GET() {
             playlist[] {
               trackTitle,
               speaker,
-              "audioFileUrl": audioFile.asset->url
+              audioUrl
             }
           }
         }
@@ -325,7 +326,8 @@ export async function GET() {
               title: selectedTrack?.trackTitle || activeSchedule.eventName,
               artist: selectedTrack?.speaker || activeSchedule.speaker || "Pondok Pesantren Al Muttaqin",
               program_title: stationName,
-              audio_url: selectedTrack?.audioFileUrl || null,
+              // 🟢 PERBAIKAN SAKRAL 2: Menyinkronkan pemetaan JSON target langsung ke string audioUrl baru
+              audio_url: selectedTrack?.audioUrl || null,
               elapsed_seconds: trackElapsedSeconds,
               allSchedules: cachedSchedules
             }, { headers: getSecureHeaders() });
@@ -346,7 +348,7 @@ export async function GET() {
               artist: activeSchedule.speaker || "Pondok Pesantren Al Muttaqin",
               program_title: activeSchedule.eventName || stationName,
               audio_url: selectedFiller.url,
-              elapsed_seconds: trackElapsedSeconds,
+              trackElapsedSeconds: trackElapsedSeconds,
               allSchedules: cachedSchedules
             }, { headers: getSecureHeaders() });
           }
