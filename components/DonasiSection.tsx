@@ -61,7 +61,7 @@ export default function DonasiSection({
               className="mt-6 inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-3.5 font-semibold text-white transition hover:bg-emerald-700"
             >
               <MessageCircle size={18} />
-              Konfirmasi via WhatsApp
+              Konfirmasi via WhatsApp.
             </a>
           </div>
 
